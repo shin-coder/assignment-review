@@ -1,0 +1,66 @@
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: sans-serif;
+}
+
+/* E2E の目印: 見出しの文字色 */
+#title {
+  color: rgb(0, 0, 255);
+}
+
+.slider {
+  position: relative;
+  width: 480px;
+  max-width: 100%;
+}
+
+.slide {
+  display: none;
+  height: 240px;
+  align-items: flex-end;
+  padding: 16px;
+  background-color: #8fbcbb;
+}
+
+.slide.is-active {
+  display: flex;
+}
+
+#slide-2 {
+  background-color: #5e81ac;
+}
+
+#slide-3 {
+  background-color: #d08770;
+}
+
+.slide-caption {
+  margin: 0;
+  color: #fff;
+  font-size: 20px;
+}
+
+.prev,
+.next {
+  margin-top: 8px;
+}
+
+.dots {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: #ccc;
+}
+
+.dot.is-active {
+  background-color: #333;
+}

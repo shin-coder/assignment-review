@@ -1,0 +1,45 @@
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: sans-serif;
+}
+
+/* E2E の目印: 見出しの文字色 */
+#title {
+  color: rgb(0, 0, 255);
+}
+
+.nav {
+  display: flex;
+  gap: 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.works {
+  display: flex;
+  gap: 16px;
+}
+
+.work {
+  flex: 1;
+  padding: 16px;
+  border: 1px solid #ccc;
+}
+
+.profile {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: #f5f5f5;
+}
+
+.skills th {
+  text-align: left;
+  padding-right: 16px;
+}
+
+.contact {
+  margin-top: 16px;
+  padding: 16px;
+  border-top: 2px solid #333;
+}

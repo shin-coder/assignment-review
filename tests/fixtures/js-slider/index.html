@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>フォトギャラリー</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <h1 id="title">フォトギャラリー</h1>
+
+  <div class="slider" id="slider">
+    <div class="slides">
+      <div class="slide" id="slide-1">
+        <p class="slide-caption">春の公園</p>
+      </div>
+      <div class="slide" id="slide-2">
+        <p class="slide-caption">夏の海</p>
+      </div>
+      <div class="slide" id="slide-3">
+        <p class="slide-caption">秋の山</p>
+      </div>
+    </div>
+    <button type="button" class="prev">前へ</button>
+    <button type="button" class="next">次へ</button>
+    <!-- ドットは js/slider.js が生成する -->
+    <div class="dots"></div>
+  </div>
+
+  <p class="note">左右のボタンかドットで写真を切り替えられます。</p>
+
+  <script src="js/slider.js"></script>
+</body>
+</html>
