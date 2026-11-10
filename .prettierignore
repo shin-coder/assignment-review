@@ -3,5 +3,7 @@ coverage
 playwright-report
 test-results
 pnpm-lock.yaml
+# 並列開発用の git worktree
+.worktrees
 # 期待値の基準なので整形もしない
 tests/fixtures

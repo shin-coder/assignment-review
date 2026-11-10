@@ -9,7 +9,15 @@ import tseslint from "typescript-eslint";
 export default defineConfig(
   {
     // tests/fixtures は生徒サイトを模したサンプルで、期待値の基準なので lint で書き換えさせない
-    ignores: ["dist", "coverage", "playwright-report", "test-results", "tests/fixtures"],
+    // .worktrees は並列開発用の git worktree（それぞれの中で lint する）
+    ignores: [
+      "dist",
+      "coverage",
+      "playwright-report",
+      "test-results",
+      "tests/fixtures",
+      ".worktrees",
+    ],
   },
   {
     files: ["**/*.{ts,tsx}"],
