@@ -18,7 +18,7 @@ HTML を解析して各要素のソース上の位置を記録し、「画面の
 ## 実装方針
 
 - `parse5` を `sourceCodeLocationInfo: true` で使う。parse5 はブラウザと同じ規則で不正な HTML を補正するため、iframe 内の DOM 構造と一致させやすい
-- 補正で生成された要素（閉じタグ漏れで暗黙に作られた `<tbody>` や `<html>` `<head>` `<body>` など、ソース上に開始タグがない要素）は位置情報がないので、その旨を `ElementInfo` で判別できるようにする（必要なら共有型の変更依頼をメモ欄に書く）
+- 補正で生成された要素（暗黙に作られた `<tbody>` や `<html>` `<head>` `<body>` など、ソース上に開始タグがない要素）も対応表とツリーには入れるが、`location` と `startTag` を `null` にする（`src/shared/element.ts` の定義どおり）。これらは編集・コメントの対象外
 - 属性はソースのテキストに**挿入**する形で付ける（parse5 で再シリアライズしない）。生徒のソースの書き方をプレビューでも保つため
 
 ## 実装チェックリスト
@@ -32,7 +32,7 @@ HTML を解析して各要素のソース上の位置を記録し、「画面の
 - [ ] `injectReviewIds(source, map)`: 各要素の開始タグに `data-review-id="..."` を挿入したプレビュー用 HTML を返す
   - [ ] 自己終了タグ（`<img />`）や属性のない開始タグでも正しく挿入される
   - [ ] 開始タグがソースにない要素には付けない
-- [ ] `injectScriptTag(html, scriptUrl)`: 注入スクリプト（`INJECT_SCRIPT_PATH`）を読み込む `<script>` を挿入する（`<head>` がなくても動く）
+- [ ] `injectScriptTag(html, scriptUrl)`: 注入スクリプト（URL は呼び出し側が `injectScriptUrl()` で求めて渡す）を読み込む `<script type="module">` を挿入する（`<head>` がなくても動く）
 - [ ] `findElementAt(map, filePath, offset)`: ソース上の位置からもっとも内側の要素を返す（エディタのカーソル → ツリー選択に使う）
 
 ## テストチェックリスト

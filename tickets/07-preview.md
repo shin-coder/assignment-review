@@ -39,7 +39,7 @@ Service Worker は「受け取ったファイルをそのまま返す」だけ�
 
 ### 親アプリ側（`src/preview/`）
 
-- [ ] `registerPreviewWorker()`: Service Worker を登録し、`navigator.serviceWorker.ready` に加えて**このページが制御下に入るまで**（`controller` が設定されるまで／`controllerchange`）待つ Promise を返す
+- [ ] `registerPreviewWorker()`: Service Worker を `serviceWorkerScriptUrl(import.meta.env.DEV)` から `{ type: "module", scope: "/" }` で登録し（開発時は Vite が TS を ES モジュールとして配信するため `type: "module"` が必要。スコープ `/` は開発サーバの `Service-Worker-Allowed` ヘッダーで許可済み）、`navigator.serviceWorker.ready` に加えて**このページが制御下に入るまで**（`controller` が設定されるまで／`controllerchange`）待つ Promise を返す
 - [ ] `putFiles(sessionId, files)`: ファイルを送って `sw:ack` を待つ
 - [ ] `PreviewFrame` React コンポーネント
   - [ ] Service Worker の準備と `putFiles` の完了前は iframe を描画しない（読み込み中表示を出す）
@@ -61,6 +61,7 @@ Service Worker は「受け取ったファイルをそのまま返す」だけ�
 ## 完了条件
 
 - [ ] `pnpm exec tsc --noEmit` が通る
+- [ ] `pnpm exec tsc --noEmit -p tsconfig.sw.json` が通る（Service Worker は DOM と型が衝突するため別の設定で確認する）
 - [ ] `pnpm exec vitest run` が通る
 - [ ] `pnpm exec eslint .` が通る
 

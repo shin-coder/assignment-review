@@ -49,7 +49,7 @@ iframe 内の生徒サイトに注入し、ホバー時のハイライトとク�
 - [ ] `pnpm exec tsc --noEmit` が通る
 - [ ] `pnpm exec vitest run` が通る
 - [ ] `pnpm exec eslint .` が通る
-- [ ] ビルドで注入スクリプトが単独の JS ファイルとして出力され、`INJECT_SCRIPT_PATH` で配信される
+- [ ] 開発時は `injectScriptUrl(true)`、ビルド後は `injectScriptUrl(false)` の URL で注入スクリプトが配信される
 
 ## メモ
 

@@ -1,0 +1,7 @@
+dist
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml
+# 期待値の基準なので整形もしない
+tests/fixtures

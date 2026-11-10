@@ -1,0 +1,11 @@
+{
+  // Service Worker 用。DOM と WebWorker の型は同じプログラムに入れると衝突するため分ける
+  // 型チェック: pnpm exec tsc --noEmit -p tsconfig.sw.json
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "WebWorker"],
+    "types": []
+  },
+  "include": ["src/sw", "src/shared"],
+  "exclude": ["src/**/*.test.ts"]
+}

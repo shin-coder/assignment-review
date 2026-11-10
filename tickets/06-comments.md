@@ -17,7 +17,7 @@
 
 ## 実装チェックリスト
 
-- [ ] `createComment(info: ElementInfo | null, body)`: 要素の位置から `ReviewComment` を作る。`info` が `null`（JS 生成要素など、ソース位置がない）の場合は作らずに理由を返す
+- [ ] `createComment(info: ElementInfo | null, body)`: 要素の位置から `ReviewComment` を作る。`info` が `null`（JS 生成要素）または `info.location` が `null`（補正で暗黙に作られた要素）の場合は作らずに理由を返す
 - [ ] `shiftLocation(location, change: TextChange)`: 編集による位置のずれを計算する
   - [ ] 変更がコメント範囲より後ろ → そのまま
   - [ ] 変更がコメント範囲より前 → 差分だけずらす

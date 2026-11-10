@@ -1,0 +1,5 @@
+# 公開から 7 日（分単位）たっていないバージョンは入れない
+minimumReleaseAge: 10080
+# インストール時のスクリプトを許可するパッケージ
+onlyBuiltDependencies:
+  - esbuild

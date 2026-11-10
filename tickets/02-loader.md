@@ -16,7 +16,7 @@
 
 ## 実装チェックリスト
 
-- [ ] `pickDirectory()`: `showDirectoryPicker({ mode: "read" })` を呼ぶ。ユーザーがキャンセルした場合（`AbortError`）は `null` を返し、例外にしない
+- [ ] `pickDirectory()`: `showDirectoryPicker({ mode: "read" })` を呼ぶ（型は `src/shared/file-system-access.d.ts`。Chrome 以外では存在しないので、ない場合は対応ブラウザでない旨のエラーを返す）。ユーザーがキャンセルした場合（`AbortError`）は `null` を返し、例外にしない
 - [ ] `loadDirectory(handle)`: フォルダを再帰的に辿り `VirtualFileSystem` を返す
   - [ ] 引数は `FileSystemDirectoryHandle` の必要最小限（`name`, `kind`, `values()` / `entries()`, `getFile()`）だけに依存する型にする（E2E と単体テストで偽のハンドルを渡せるようにするため）
   - [ ] パスは `src/shared` の `normalizePath()` で正規化する

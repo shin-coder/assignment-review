@@ -26,12 +26,14 @@ tools: Read, Grep, Glob, Bash, Edit
    - `pnpm exec tsc --noEmit`
    - `pnpm exec vitest run`
    - `pnpm exec eslint .`
+   - `src/sw/` または `src/shared/` に変更がある場合は `pnpm exec tsc --noEmit -p tsconfig.sw.json` も実行する
    - チケット 12・13 や E2E に関わる場合は `pnpm exec playwright test` も実行する
 5. **ルール違反の確認**
    - 担当ディレクトリ外（とくに `src/shared/`、`package.json`、ルートの設定ファイル、他チケットの担当ディレクトリ）を変更していないか。git リポジトリなら `git status` / `git diff --stat` で確認する
    - `tests/fixtures/` を書き換えていないか（01 以外）
    - CLAUDE.md の設計上のルール（iframe 内で React を使わない、HTML/CSS 編集をソースに反映する、コメントをソース位置に紐付ける、Service Worker の登録完了を待つ、生徒のフォルダに書き込まない、JS 生成要素を対象外にする）に反していないか
    - npm / yarn を使った形跡（`package-lock.json`、`yarn.lock`）がないか
+   - 依存パッケージが追加・変更されている場合: バージョンが完全一致で固定され、`pnpm-lock.yaml` が更新されているか。`minimumReleaseAge` と `onlyBuiltDependencies` の設定が外されていないか。新しいパッケージについて、チケット 00 と同じ確認（2026 年の更新・アーカイブされていない・公式リポジトリ）の記録がメモ欄にあるか
 6. **判定**
    - **承認**: すべての項目が満たされ、すべてのコマンドが成功し、ルール違反がない
    - **要修正**: 上記のどれか 1 つでも満たさない
