@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { LoaderError } from "./errors";
 import { createFakeDirectory, type WriteCall } from "./fakeHandles";
 import { isExcludedName, loadDirectory, type DirectoryHandleLike } from "./loadDirectory";
@@ -93,6 +93,7 @@ describe("loadDirectory", () => {
     const error = await loadDirectory(root, { maxTotalBytes: 9 }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(LoaderError);
     expect((error as LoaderError).code).toBe("too-large");
+    expect((error as LoaderError).message).toContain("MB");
   });
 
   it("フォルダに書き込まない（書き込み系のメソッドを呼ばない）", async () => {
@@ -114,10 +115,8 @@ describe("loadDirectory", () => {
   });
 
   it("本物の FileSystemDirectoryHandle を渡せる型になっている", () => {
-    // 型の互換性の確認（実行時には何もしない）
-    const accept = (handle: DirectoryHandleLike) => handle;
-    const real = null as unknown as FileSystemDirectoryHandle;
-    expect(() => accept(real)).not.toThrow();
+    // 型の互換性の確認。tsc（pnpm exec tsc --noEmit）で検査される
+    expectTypeOf<FileSystemDirectoryHandle>().toExtend<DirectoryHandleLike>();
   });
 });
 
