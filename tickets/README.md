@@ -51,7 +51,7 @@
 2. 共有の型や依存パッケージの追加が必要になったら、作業を止めてチケットの「メモ」欄に書き、まとめて 00 の担当（または統合担当）が `src/shared/` に反映する
 3. 他の層の実装を `import` しない。他層とのやり取りは `src/shared/` の型だけを使い、テストではモックを使う。実物どうしの配線は 12 で行う
 4. 単体テストは対象ファイルの隣に `*.test.ts(x)` として置く
-5. 並列作業は git worktree を使う前提。00 の成果（`pnpm-lock.yaml` を含む）をコミットしてから、各チケットの worktree を作る
+5. チケットごとに `ticket/NN-<名前>` のブランチを作って作業・コミットする（例: `ticket/04-parser`）。Wave 1 のブランチは、承認済みの 00 のブランチから作る。並列作業は git worktree を使う前提
 6. 依存パッケージは `pnpm install --frozen-lockfile` で入れる（`pnpm-lock.yaml` を書き換えない）。Claude のサンドボックス内では実行せず、ユーザーが実行する（サンドボックス内ではプロジェクト内に別のストアができて食い違うため）
 7. Service Worker（`src/sw/`）や `src/shared/` を変更したら、`pnpm exec tsc --noEmit -p tsconfig.sw.json` でも型チェックする
 
