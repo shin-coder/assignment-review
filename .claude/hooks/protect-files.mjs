@@ -13,11 +13,10 @@ const rules = [
     matches: () => /^\.env(\..+)?$/.test(fileName) && fileName !== ".env.example",
     reason: ".env ファイルは編集禁止です",
   },
-  // TODO: テスト用サンプルサイトのディレクトリが決まったら追加する
-  // {
-  //   matches: () => filePath.includes("/<サンプルサイトのディレクトリ>/"),
-  //   reason: "テスト用サンプルサイトは期待値の基準なので編集禁止です",
-  // },
+  {
+    matches: () => filePath.includes("/tests/fixtures/"),
+    reason: "テスト用サンプルサイトは期待値の基準なので編集禁止です",
+  },
 ];
 
 const hit = rules.find((rule) => rule.matches());

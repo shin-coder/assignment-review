@@ -45,7 +45,8 @@
   - js-slider: `js/slider.js` が 200。ドット（`.dot`）が 3 個生成され、読み込み直後は `#slide-1`、「次へ」で `#slide-2` が表示された
 - 2026-11-10: `broken-html` の補正後の DOM は `tests/fixtures/README.md` に記録した。`html` `head` `body` `tbody` はソースに開始タグがない暗黙の要素
 - 2026-11-10: lint・整形の対象外にする設定（`eslint.config.js` の `ignores` と `.prettierignore` の `tests/fixtures`）は 00 で入っている
-- 編集禁止のフック（ユーザーに追加を依頼）: `.claude/hooks/protect-files.mjs` の `rules` の TODO を次に置き換える。追加すると Claude もサンプルを編集できなくなる（意図どおり）。サンプルを直す必要があるときは、ユーザーが一時的にこのルールを外す
+- 2026-11-10: ユーザーの依頼で、Claude が下の編集禁止ルールを `.claude/hooks/protect-files.mjs` に追加した。フックに入力を直接渡して、`tests/fixtures/` 配下だけが終了コード 2（ブロック）になり、`tests/setup.ts` などは通ることを確認した
+- 編集禁止のフック: `.claude/hooks/protect-files.mjs` の `rules` の TODO を次に置き換える。追加すると Claude もサンプルを編集できなくなる（意図どおり）。サンプルを直す必要があるときは、ユーザーが一時的にこのルールを外す
 
   ```js
   {
