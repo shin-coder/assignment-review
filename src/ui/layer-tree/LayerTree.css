@@ -1,0 +1,106 @@
+/* 画面共有で読めるよう、文字は大きめ・色の差ははっきりさせる。色は変数で親から上書きできる */
+.layer-tree {
+  --layer-tree-font-size: 16px;
+  --layer-tree-text: #1f2328;
+  --layer-tree-muted: #57606a;
+  --layer-tree-tag: #8250df;
+  --layer-tree-hover-bg: #e7f0ff;
+  --layer-tree-selected-bg: #0b57d0;
+  --layer-tree-selected-text: #ffffff;
+  --layer-tree-focus: #e8a400;
+  --layer-tree-comment: #e8590c;
+
+  box-sizing: border-box;
+  height: 100%;
+  margin: 0;
+  padding: 4px 0;
+  overflow: auto;
+  list-style: none;
+  color: var(--layer-tree-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--layer-tree-font-size);
+  line-height: 1.4;
+}
+
+.layer-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  min-height: 2em;
+  padding-inline-end: 0.75em;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.layer-tree__row[data-hovered="true"] {
+  background: var(--layer-tree-hover-bg);
+}
+
+.layer-tree__row[aria-selected="true"] {
+  background: var(--layer-tree-selected-bg);
+  color: var(--layer-tree-selected-text);
+}
+
+.layer-tree__row:focus {
+  outline: none;
+}
+
+.layer-tree__row:focus-visible {
+  outline: 3px solid var(--layer-tree-focus);
+  outline-offset: -3px;
+}
+
+.layer-tree__toggle {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  width: 1.25em;
+  color: var(--layer-tree-muted);
+}
+
+.layer-tree__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layer-tree__tag {
+  color: var(--layer-tree-tag);
+  font-weight: 600;
+}
+
+.layer-tree__attrs {
+  color: var(--layer-tree-muted);
+}
+
+.layer-tree__row[aria-selected="true"] .layer-tree__toggle,
+.layer-tree__row[aria-selected="true"] .layer-tree__tag,
+.layer-tree__row[aria-selected="true"] .layer-tree__attrs {
+  color: inherit;
+}
+
+.layer-tree__comment-badge {
+  flex: none;
+  width: 0.7em;
+  height: 0.7em;
+  margin-inline-start: 0.25em;
+  border: 2px solid var(--layer-tree-selected-text);
+  border-radius: 50%;
+  background: var(--layer-tree-comment);
+}
+
+.layer-tree__visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.layer-tree-empty {
+  margin: 0;
+  padding: 1em;
+  color: #57606a;
+  font-size: 16px;
+}
