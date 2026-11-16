@@ -1,2 +1,9 @@
-// チケットで実装する（tickets/README.md の担当表を参照）
-export {};
+export { applyChangesToComments } from "./applyChangesToComments";
+export {
+  createComment,
+  type CreateCommentFailureReason,
+  type CreateCommentOptions,
+  type CreateCommentResult,
+} from "./createComment";
+export { resolveCommentElement } from "./resolveCommentElement";
+export { shiftLocation } from "./shiftLocation";
