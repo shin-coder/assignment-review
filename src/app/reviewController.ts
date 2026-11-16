@@ -1,0 +1,558 @@
+// レビュー画面の状態と操作（React に依存しない）。
+// SourceStore・解析結果・選択・編集の反映・コメントをまとめて持ち、画面（React）は
+// subscribe / getState で読むだけにする。iframe への送信は attachFrame で渡された関数を通す
+import {
+  applyChangesToComments,
+  createComment,
+  resolveCommentElement,
+  shiftLocation,
+} from "../comments";
+import { classifyEdit, isNoopChange, replaceFile } from "../edit";
+import { findElementAt } from "../parser";
+import {
+  PREVIEW_PREFIX,
+  normalizePath,
+  type ElementId,
+  type ElementInfo,
+  type LayerNode,
+  type ParentToFrameMessage,
+  type FrameToParentMessage,
+  type ReviewComment,
+  type SourceLocation,
+  type TextChange,
+  type VirtualFile,
+} from "../shared";
+import type { SourceStore } from "../store";
+import { alignChangeToTagBoundary } from "./alignChange";
+import {
+  analyzePage,
+  buildPreviewFiles,
+  isHtmlPath,
+  planElementReplace,
+  type PageInfo,
+} from "./previewFiles";
+
+/** JS が生成した要素を選んだときに出す文 */
+export const GENERATED_NOTICE = "JS が生成した要素は編集・コメントの対象外です";
+const IMPLICIT_REASON = "ソースに記述のない要素にはコメントできません";
+
+export type FrameSender = (message: ParentToFrameMessage) => void;
+
+export interface ReviewState {
+  /** iframe が最初に開くパス。HTML がなければ null */
+  entryPath: string | null;
+  /** いま iframe に表示している HTML */
+  currentPage: string | null;
+  /** 変わると iframe を作り直す */
+  rebuildKey: number;
+  /** Service Worker に渡すファイル群。内容が変わったときだけ新しい配列になる */
+  previewFiles: readonly VirtualFile[];
+  htmlPaths: readonly string[];
+  tree: readonly LayerNode[];
+  selectedId: ElementId | null;
+  hoveredId: ElementId | null;
+  /** 選択中の要素の表示名 */
+  selectedLabel: string | null;
+  /** JS 生成要素を選んだときの案内。それ以外は null */
+  generatedNotice: string | null;
+  /** コメントできない理由。できるなら null */
+  commentDisabledReason: string | null;
+  openPaths: readonly string[];
+  activePath: string | null;
+  /** エディタで強調する範囲 */
+  highlight: SourceLocation | null;
+  comments: readonly ReviewComment[];
+  /** コメント ID → 要素の表示名 */
+  commentLabels: Record<string, string>;
+  /** 表示中の HTML でコメントが付いている要素 */
+  commentedIds: ReadonlySet<ElementId>;
+  activeCommentId: string | null;
+  /** 画面に出すエラーなど */
+  message: string | null;
+}
+
+type Core = {
+  entryPath: string | null;
+  currentPage: string | null;
+  rebuildKey: number;
+  previewFiles: readonly VirtualFile[];
+  selectedId: ElementId | null;
+  hoveredId: ElementId | null;
+  generated: boolean;
+  /** true のとき、エディタの強調を出さない（エディタのカーソル操作で選んだとき） */
+  highlightHidden: boolean;
+  /** 見つからなくなったコメントを選んだときの強調範囲 */
+  highlightOverride: SourceLocation | null;
+  openPaths: readonly string[];
+  activePath: string | null;
+  activeCommentId: string | null;
+  message: string | null;
+};
+
+export interface ReviewControllerOptions {
+  store: SourceStore;
+  /** 操作スクリプトの URL の選択に使う（import.meta.env.DEV） */
+  isDev: boolean;
+  /** 最初に開く HTML。省略時は index.html、なければ最初の HTML */
+  initialPage?: string | null;
+}
+
+export type AddCommentResult = { ok: true; id: string } | { ok: false; message: string };
+
+export class ReviewController {
+  readonly store: SourceStore;
+  private readonly isDev: boolean;
+  private readonly pages = new Map<string, PageInfo>();
+  private readonly listeners = new Set<() => void>();
+  private sender: FrameSender | null = null;
+  private core: Core;
+  private state: ReviewState;
+
+  constructor({ store, isDev, initialPage }: ReviewControllerOptions) {
+    this.store = store;
+    this.isDev = isDev;
+    for (const path of store.paths()) this.analyze(path);
+    const htmlPaths = [...this.pages.keys()];
+    const first =
+      (initialPage && this.pages.has(initialPage) ? initialPage : null) ??
+      (this.pages.has("index.html") ? "index.html" : (htmlPaths[0] ?? null));
+    this.core = {
+      entryPath: first,
+      currentPage: first,
+      rebuildKey: 0,
+      previewFiles: buildPreviewFiles(store.currentFiles(), this.pages),
+      selectedId: null,
+      hoveredId: null,
+      generated: false,
+      highlightHidden: false,
+      highlightOverride: null,
+      openPaths: first ? [first] : [],
+      activePath: first,
+      activeCommentId: null,
+      message: null,
+    };
+    this.state = this.derive();
+  }
+
+  // ---- 購読 ----
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  getState = (): ReviewState => this.state;
+
+  /** iframe へ送る関数を設定する。iframe がないときは null */
+  attachFrame(sender: FrameSender | null): void {
+    this.sender = sender;
+  }
+
+  // ---- 内部 ----
+
+  private analyze(path: string): PageInfo | null {
+    if (!isHtmlPath(path)) return null;
+    const text = this.store.getEdited(path);
+    if (typeof text !== "string") return null;
+    const page = analyzePage(path, text, this.isDev);
+    this.pages.set(path, page);
+    return page;
+  }
+
+  private page(): PageInfo | null {
+    return this.core.currentPage ? (this.pages.get(this.core.currentPage) ?? null) : null;
+  }
+
+  private selectedInfo(): ElementInfo | null {
+    const id = this.core.selectedId;
+    return id === null ? null : (this.page()?.analysis.map.get(id) ?? null);
+  }
+
+  private commit(patch: Partial<Core>): void {
+    this.core = { ...this.core, ...patch };
+    this.state = this.derive();
+    for (const listener of [...this.listeners]) listener();
+  }
+
+  private send(message: ParentToFrameMessage): void {
+    this.sender?.(message);
+  }
+
+  private derive(): ReviewState {
+    const page = this.page();
+    const info = this.selectedInfo();
+    const comments = this.store.getComments();
+    const commentLabels: Record<string, string> = {};
+    const commentedIds = new Set<ElementId>();
+    for (const comment of comments) {
+      if (comment.status !== "active") continue;
+      const target = this.pages.get(comment.location.filePath);
+      if (!target) continue;
+      const id = resolveCommentElement(comment, target.analysis.map);
+      if (id === null) continue;
+      const label = target.labels.get(id);
+      if (label !== undefined) commentLabels[comment.id] = label;
+      if (target === page) commentedIds.add(id);
+    }
+    const { core } = this;
+    let commentDisabledReason: string | null = null;
+    if (core.generated) commentDisabledReason = GENERATED_NOTICE;
+    else if (info && info.location === null) commentDisabledReason = IMPLICIT_REASON;
+    const highlight =
+      core.highlightOverride ?? (core.highlightHidden ? null : (info?.location ?? null));
+    return {
+      entryPath: core.entryPath,
+      currentPage: core.currentPage,
+      rebuildKey: core.rebuildKey,
+      previewFiles: core.previewFiles,
+      htmlPaths: [...this.pages.keys()],
+      tree: page?.analysis.tree ?? [],
+      selectedId: core.selectedId,
+      hoveredId: core.hoveredId,
+      selectedLabel: core.selectedId === null ? null : (page?.labels.get(core.selectedId) ?? null),
+      generatedNotice: core.generated ? GENERATED_NOTICE : null,
+      commentDisabledReason,
+      openPaths: core.openPaths,
+      activePath: core.activePath,
+      highlight,
+      comments,
+      commentLabels,
+      commentedIds,
+      activeCommentId: core.activeCommentId,
+      message: core.message,
+    };
+  }
+
+  /** 指定したファイルをエディタで開く（タブになければ足す） */
+  private withOpened(path: string): Pick<Core, "openPaths" | "activePath"> {
+    const openPaths = this.core.openPaths.includes(path)
+      ? this.core.openPaths
+      : [...this.core.openPaths, path];
+    return { openPaths, activePath: path };
+  }
+
+  /** iframe を作り直す。表示中の HTML から開き直す */
+  private rebuildPatch(): Partial<Core> {
+    return {
+      rebuildKey: this.core.rebuildKey + 1,
+      entryPath: this.core.currentPage,
+      hoveredId: null,
+    };
+  }
+
+  private updatePreviewFile(path: string): readonly VirtualFile[] {
+    const current = this.store.currentFiles().find((file) => file.path === path);
+    if (!current) return this.core.previewFiles;
+    const next = buildPreviewFiles([current], this.pages)[0]!;
+    return this.core.previewFiles.map((file) => (file.path === path ? next : file));
+  }
+
+  // ---- 選択 ----
+
+  private select(
+    id: ElementId | null,
+    options: { generated?: boolean; fromEditor?: boolean } = {},
+  ): void {
+    const info = id === null ? null : (this.page()?.analysis.map.get(id) ?? null);
+    const selectedId = info ? info.id : null;
+    const patch: Partial<Core> = {
+      selectedId,
+      generated: options.generated ?? false,
+      highlightHidden: options.fromEditor ?? false,
+      highlightOverride: null,
+      activeCommentId: null,
+      message: null,
+    };
+    if (info && !options.fromEditor) Object.assign(patch, this.withOpened(info.filePath));
+    this.commit(patch);
+    this.send({ type: "review:highlight", elementId: selectedId });
+  }
+
+  /** レイヤーツリーで選んだ */
+  selectFromTree(id: ElementId): void {
+    this.select(id);
+  }
+
+  setHovered(id: ElementId | null): void {
+    if (this.core.hoveredId === id) return;
+    this.commit({ hoveredId: id });
+  }
+
+  /** iframe からのメッセージ */
+  handleFrameMessage(message: FrameToParentMessage): void {
+    switch (message.type) {
+      case "review:ready":
+        // 作り直し直後の iframe に選択の枠を付け直す
+        if (this.core.selectedId !== null) {
+          this.send({ type: "review:highlight", elementId: this.core.selectedId });
+        }
+        break;
+      case "review:hover": {
+        const known =
+          message.elementId !== null && this.page()?.analysis.map.has(message.elementId);
+        this.setHovered(known ? message.elementId : null);
+        break;
+      }
+      case "review:select":
+        // JS 生成要素は祖先を選んで案内を出す（祖先がなければ選択なし）
+        this.select(message.elementId, { generated: message.generated });
+        break;
+    }
+  }
+
+  /** エディタのカーソルが動いた（表示中の HTML の中のときだけ要素を選ぶ） */
+  cursorMoved(path: string, offset: number): void {
+    const page = this.page();
+    if (!page || page.path !== path) return;
+    const info = findElementAt(page.analysis.map, path, offset);
+    if (!info || (info.id === this.core.selectedId && !this.core.generated)) return;
+    this.select(info.id, { fromEditor: true });
+  }
+
+  // ---- ファイル・ページ ----
+
+  openFile(path: string): void {
+    if (!this.store.hasFile(path)) return;
+    this.commit(this.withOpened(path));
+  }
+
+  closeFile(path: string): void {
+    const openPaths = this.core.openPaths.filter((p) => p !== path);
+    const activePath =
+      this.core.activePath === path
+        ? (openPaths[openPaths.length - 1] ?? null)
+        : this.core.activePath;
+    this.commit({ openPaths, activePath });
+  }
+
+  /** 表示する HTML を切り替える（iframe を開き直す） */
+  openPage(path: string): void {
+    if (!this.pages.has(path)) return;
+    this.commit({
+      currentPage: path,
+      selectedId: null,
+      generated: false,
+      highlightOverride: null,
+      activeCommentId: null,
+      ...this.withOpened(path),
+      ...this.rebuildPatchFor(path),
+    });
+  }
+
+  private rebuildPatchFor(path: string): Partial<Core> {
+    return { rebuildKey: this.core.rebuildKey + 1, entryPath: path, hoveredId: null };
+  }
+
+  /** iframe の load 後に、生徒サイト内のリンクで移動したページを追従する */
+  notifyFramePath(sessionId: string, pathname: string): void {
+    const prefix = `${PREVIEW_PREFIX}${encodeURIComponent(sessionId)}/`;
+    if (!pathname.startsWith(prefix)) return;
+    let path: string;
+    try {
+      const decoded = pathname
+        .slice(prefix.length)
+        .split("/")
+        .map((s) => decodeURIComponent(s))
+        .join("/");
+      path = normalizePath(decoded);
+    } catch {
+      return;
+    }
+    const candidates = [path, path === "" ? "index.html" : `${path}/index.html`];
+    const found = candidates.find((p) => this.pages.has(p));
+    if (!found || found === this.core.currentPage) return;
+    // iframe はすでにそのページを表示しているので、作り直さず状態だけ合わせる
+    this.commit({
+      currentPage: found,
+      selectedId: null,
+      generated: false,
+      highlightOverride: null,
+      activeCommentId: null,
+      hoveredId: null,
+      ...this.withOpened(found),
+    });
+  }
+
+  // ---- 編集 ----
+
+  /**
+   * エディタの変更を反映する。path は編集したファイル（ファイルを切り替えた直後に
+   * 前のファイルの保留中の変更が届くことがあるため、必ず path で振り分ける）
+   */
+  editFile(path: string, text: string): void {
+    const current = this.store.getEdited(path);
+    if (typeof current !== "string" || current === text) return;
+    const kind = classifyEdit(path);
+    const raw = replaceFile(current, text, path).change;
+    const change = isHtmlPath(path) ? alignChangeToTagBoundary(current, text, raw) : raw;
+
+    this.store.setEdited(path, text);
+    this.followComments([change]);
+
+    if (kind.kind === "html") {
+      this.afterHtmlEdit(path, change);
+    } else if (kind.kind === "css") {
+      this.commit({ previewFiles: this.updatePreviewFile(path), message: null });
+      this.send({ type: "review:replace-css", path, text });
+    } else {
+      // JS・その他は iframe を作り直す。HTML/CSS の編集はソースに入っているので残る
+      this.commit({
+        previewFiles: this.updatePreviewFile(path),
+        message: null,
+        ...this.rebuildPatch(),
+      });
+    }
+  }
+
+  /** 編集の TextChange（発生順）でコメントの位置を追従させる */
+  private followComments(changes: readonly TextChange[]): void {
+    const real = changes.filter((c) => !isNoopChange(c));
+    if (real.length === 0) return;
+    const before = this.store.getComments();
+    const after = applyChangesToComments(before, real);
+    if (after.some((comment, i) => comment !== before[i])) this.store.replaceComments(after);
+  }
+
+  private afterHtmlEdit(path: string, change: TextChange): void {
+    const before = this.pages.get(path) ?? null;
+    const after = this.analyze(path);
+    if (!after) return;
+    const previewFiles = this.updatePreviewFile(path);
+    const patch: Partial<Core> = { previewFiles, message: null };
+
+    // 選択中の要素は、編集で動いた開始位置から探し直す
+    const selected = this.selectedInfo();
+    let selectedId: ElementId | null = this.core.selectedId;
+    if (path === this.core.currentPage && selected?.location) {
+      const moved = shiftLocation(selected.location, change);
+      selectedId = null;
+      if (moved && selected.filePath === path) {
+        for (const info of after.analysis.map.values()) {
+          if (info.location?.start === moved.start) {
+            selectedId = info.id;
+            break;
+          }
+        }
+      }
+      patch.selectedId = selectedId;
+      if (selectedId === null) patch.generated = false;
+    } else if (path === this.core.currentPage && selected) {
+      selectedId = after.analysis.map.has(selected.id) ? selected.id : null;
+      patch.selectedId = selectedId;
+    }
+
+    if (path !== this.core.currentPage) {
+      this.commit(patch);
+      return;
+    }
+    const plan = before ? planElementReplace(before, after, change) : null;
+    if (!plan) {
+      this.commit({ ...patch, ...this.rebuildPatch() });
+      return;
+    }
+    this.commit(patch);
+    this.send({ type: "review:replace-element", elementId: plan.elementId, html: plan.html });
+    // head を差し替えると適用済みの CSS が元の link に戻るため、編集済みの CSS を送り直す
+    if (/<link[\s>/]/i.test(plan.html)) {
+      for (const cssPath of this.store.editedPaths()) {
+        const css = this.store.getEdited(cssPath);
+        if (classifyEdit(cssPath).kind === "css" && typeof css === "string") {
+          this.send({ type: "review:replace-css", path: cssPath, text: css });
+        }
+      }
+    }
+    this.send({ type: "review:highlight", elementId: selectedId });
+  }
+
+  /** すべての編集を元に戻す（コメントは残し、位置は元のソースに追従させる） */
+  resetAll(): void {
+    const changes: TextChange[] = [];
+    for (const path of this.store.editedPaths()) {
+      const edited = this.store.getEdited(path);
+      const original = this.store.getOriginal(path);
+      if (typeof edited !== "string" || typeof original !== "string") continue;
+      const raw = replaceFile(edited, original, path).change;
+      changes.push(isHtmlPath(path) ? alignChangeToTagBoundary(edited, original, raw) : raw);
+    }
+    const before = this.store.getComments();
+    const after = applyChangesToComments(
+      before,
+      changes.filter((c) => !isNoopChange(c)),
+    );
+    this.store.resetAll();
+    if (after.some((comment, i) => comment !== before[i])) this.store.replaceComments(after);
+
+    this.pages.clear();
+    for (const path of this.store.paths()) this.analyze(path);
+    const currentPage =
+      this.core.currentPage && this.pages.has(this.core.currentPage)
+        ? this.core.currentPage
+        : (this.pages.keys().next().value ?? null);
+    this.core = { ...this.core, currentPage };
+    this.commit({
+      currentPage,
+      previewFiles: buildPreviewFiles(this.store.currentFiles(), this.pages),
+      selectedId: null,
+      generated: false,
+      highlightOverride: null,
+      activeCommentId: null,
+      message: null,
+      ...this.rebuildPatch(),
+    });
+  }
+
+  // ---- コメント ----
+
+  addComment(body: string): AddCommentResult {
+    const result = createComment(this.selectedInfo(), body);
+    if (!result.ok) {
+      this.commit({ message: result.message });
+      return { ok: false, message: result.message };
+    }
+    this.store.addComment(result.comment);
+    this.commit({ activeCommentId: result.comment.id, message: null });
+    return { ok: true, id: result.comment.id };
+  }
+
+  updateComment(id: string, body: string): void {
+    if (!this.store.getComment(id)) return;
+    this.store.updateComment(id, { body });
+    this.commit({});
+  }
+
+  deleteComment(id: string): void {
+    this.store.removeComment(id);
+    this.commit({
+      activeCommentId: this.core.activeCommentId === id ? null : this.core.activeCommentId,
+    });
+  }
+
+  /** コメント一覧で選んだ。要素が見つかればツリー・iframe・エディタを連動させる */
+  selectComment(id: string): void {
+    const comment = this.store.getComment(id);
+    if (!comment) return;
+    const filePath = comment.location.filePath;
+    const target = this.pages.get(filePath);
+    const elementId =
+      comment.status === "active" && target
+        ? resolveCommentElement(comment, target.analysis.map)
+        : null;
+
+    if (elementId !== null && target) {
+      if (filePath !== this.core.currentPage) this.openPage(filePath);
+      this.select(elementId);
+      this.commit({ activeCommentId: id });
+      return;
+    }
+    // 見つからないコメントは、元の位置（付近）だけをエディタで示す
+    this.commit({
+      selectedId: null,
+      generated: false,
+      highlightHidden: false,
+      highlightOverride: comment.location,
+      activeCommentId: id,
+      ...this.withOpened(filePath),
+    });
+    this.send({ type: "review:highlight", elementId: null });
+  }
+}

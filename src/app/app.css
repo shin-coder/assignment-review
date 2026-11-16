@@ -1,0 +1,112 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-size: 18px;
+  font-family: system-ui, sans-serif;
+}
+
+.app button,
+.app select {
+  font: inherit;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.app-header,
+.review-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #ddd;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.notice {
+  margin: 0;
+  padding: 8px 16px;
+  background: #fff4e5;
+  color: #7a4100;
+}
+
+.empty {
+  padding: 32px 16px;
+}
+
+.review {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.review-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 左右の幅は、各ペインの右下（左は右下、右は左下ではなく右下）のつまみで調整できる */
+.pane {
+  flex: none;
+  overflow: hidden;
+  resize: horizontal;
+  min-width: 200px;
+  max-width: 60vw;
+}
+
+.pane-left {
+  width: 280px;
+  border-right: 1px solid #ddd;
+}
+
+.pane-right {
+  display: flex;
+  flex-direction: column;
+  width: 480px;
+  border-left: 1px solid #ddd;
+}
+
+.pane-center {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview {
+  height: 100%;
+}
+
+.editor-area {
+  display: flex;
+  flex: 3;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-host {
+  flex: 1;
+  min-height: 0;
+}
+
+.comment-area {
+  flex: 2;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid #ddd;
+}
