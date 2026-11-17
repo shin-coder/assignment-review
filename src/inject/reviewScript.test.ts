@@ -575,3 +575,90 @@ describe("取り付けと取り外し", () => {
     expect(post).not.toHaveBeenCalled();
   });
 });
+
+describe("review:mode", () => {
+  it("browse ではクリックを止めず、選択も送らない", () => {
+    const { post } = setup(PAGE);
+    message({ type: "review:mode", mode: "browse" });
+    post.mockClear();
+    const event = click(byId("3"));
+    expect(event.defaultPrevented).toBe(false);
+    expect(post).not.toHaveBeenCalledWith(expect.objectContaining({ type: "review:select" }));
+  });
+
+  it("browse ではホバーの枠を出さず、選択の枠も隠す。inspect に戻すと選択の枠が戻る", () => {
+    setup(PAGE);
+    mockRect(byId("1"), rect(0, 40, 100, 50));
+    message({ type: "review:highlight", elementId: "1" });
+    expect(box("selected").classList.contains("visible")).toBe(true);
+
+    message({ type: "review:mode", mode: "browse" });
+    expect(box("selected").classList.contains("visible")).toBe(false);
+    hover(byId("1"));
+    expect(box("hover").classList.contains("visible")).toBe(false);
+
+    message({ type: "review:mode", mode: "inspect" });
+    expect(box("selected").classList.contains("visible")).toBe(true);
+  });
+
+  it("browse に切り替えたら、ホバーの解除を親へ送る", () => {
+    const { post } = setup(PAGE);
+    hover(byId("2"));
+    post.mockClear();
+    message({ type: "review:mode", mode: "browse" });
+    expect(post).toHaveBeenCalledWith({ type: "review:hover", elementId: null });
+  });
+});
+
+describe("review:track", () => {
+  it("頼まれた要素の矩形を返し、見つからない要素は含めない", () => {
+    const { post } = setup(PAGE);
+    mockRect(byId("2"), rect(10, 20, 30, 40));
+    message({ type: "review:track", elementIds: ["2", "99"] });
+    expect(post).toHaveBeenCalledWith({
+      type: "review:rects",
+      rects: [{ elementId: "2", x: 10, y: 20, width: 30, height: 40 }],
+    });
+  });
+
+  it("スクロールで矩形が変わったら送り直し、変わらなければ送らない", async () => {
+    const { post } = setup(PAGE);
+    const spy = mockRect(byId("2"), rect(10, 20, 30, 40));
+    message({ type: "review:track", elementIds: ["2"] });
+    post.mockClear();
+
+    window.dispatchEvent(new Event("scroll"));
+    await nextFrames();
+    expect(post).not.toHaveBeenCalled();
+
+    spy.mockReturnValue(rect(10, -80, 30, 40));
+    window.dispatchEvent(new Event("scroll"));
+    await nextFrames();
+    expect(post).toHaveBeenCalledWith({
+      type: "review:rects",
+      rects: [{ elementId: "2", x: 10, y: -80, width: 30, height: 40 }],
+    });
+  });
+});
+
+describe("キーの転送", () => {
+  function press(target: EventTarget, init: KeyboardEventInit) {
+    target.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...init }));
+  }
+
+  it("ツール切り替えのキーと Escape を親へ送る", () => {
+    const { post } = setup(PAGE);
+    press(document.body, { key: "C" });
+    press(document.body, { key: "Escape" });
+    expect(post).toHaveBeenCalledWith({ type: "review:key", key: "c" });
+    expect(post).toHaveBeenCalledWith({ type: "review:key", key: "Escape" });
+  });
+
+  it("入力欄の中・修飾キー付き・対象外のキーは送らない", () => {
+    const { post } = setup(`${PAGE}<input data-review-id="9" />`);
+    press(byId("9"), { key: "c" });
+    press(document.body, { key: "c", metaKey: true });
+    press(document.body, { key: "x" });
+    expect(post).not.toHaveBeenCalled();
+  });
+});

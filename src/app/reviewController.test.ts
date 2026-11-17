@@ -66,7 +66,7 @@ describe("選択の連動", () => {
     controller.selectFromTree(id);
     sent.length = 0;
     controller.handleFrameMessage({ type: "review:ready" });
-    expect(sent).toEqual([{ type: "review:highlight", elementId: id }]);
+    expect(sent).toContainEqual({ type: "review:highlight", elementId: id });
   });
 });
 
@@ -311,5 +311,107 @@ describe("購読", () => {
     off();
     controller.setHovered("2");
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ツールの切り替え", () => {
+  it("最初は操作ツール。切り替えると iframe にモードを送る", () => {
+    const { controller, sent } = setup();
+    expect(controller.getState().tool).toBe("browse");
+    controller.setTool("comment");
+    expect(controller.getState().tool).toBe("comment");
+    expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
+    controller.setTool("browse");
+    expect(sent.at(-1)).toEqual({ type: "review:mode", mode: "browse" });
+  });
+
+  it("切り替えても選択は残る", () => {
+    const { controller } = setup();
+    controller.setTool("comment");
+    const id = idOf(controller.getState(), "p.a");
+    controller.handleFrameMessage({ type: "review:select", elementId: id, generated: false });
+    controller.setTool("dev");
+    expect(controller.getState().selectedId).toBe(id);
+  });
+
+  it("review:ready でモードを送り直す", () => {
+    const { controller, sent } = setup();
+    controller.setTool("dev");
+    sent.length = 0;
+    controller.handleFrameMessage({ type: "review:ready" });
+    expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
+  });
+});
+
+describe("コメントのピンと矩形の追跡", () => {
+  it("コメントモードの間だけ、ピンの要素と選択中の要素の追跡を頼む", () => {
+    const { controller, sent } = setup();
+    const a = idOf(controller.getState(), "p.a");
+    const b = idOf(controller.getState(), "p.b");
+    controller.selectFromTree(a);
+    controller.addComment("a のコメント");
+    expect(controller.getState().pins).toEqual([{ commentId: expect.any(String), elementId: a }]);
+    // 操作ツールの間は何も追跡しない
+    expect(sent.filter((m) => m.type === "review:track" && m.elementIds.length > 0)).toEqual([]);
+
+    controller.setTool("comment");
+    expect(sent.at(-2)).toEqual({ type: "review:track", elementIds: [a] });
+
+    controller.selectFromTree(b);
+    expect(sent).toContainEqual({ type: "review:track", elementIds: [a, b] });
+
+    controller.setTool("browse");
+    expect(sent).toContainEqual({ type: "review:track", elementIds: [] });
+  });
+
+  it("review:ready では同じ内容でも追跡を頼み直す", () => {
+    const { controller, sent } = setup();
+    controller.setTool("comment");
+    sent.length = 0;
+    controller.handleFrameMessage({ type: "review:ready" });
+    expect(sent).toContainEqual({ type: "review:track", elementIds: [] });
+  });
+
+  it("clearSelection で選択とコメントの選択を外す", () => {
+    const { controller, sent } = setup();
+    controller.selectFromTree(idOf(controller.getState(), "p.a"));
+    const { id } = controller.addComment("x") as { ok: true; id: string };
+    expect(controller.getState().activeCommentId).toBe(id);
+    controller.clearSelection();
+    expect(controller.getState().selectedId).toBeNull();
+    expect(controller.getState().activeCommentId).toBeNull();
+    expect(sent.at(-1)).toEqual({ type: "review:highlight", elementId: null });
+  });
+});
+
+describe("選択中の要素のソース範囲と selectionSeq", () => {
+  it("選ぶと selectedLocation が入り、selectionSeq が増える", () => {
+    const { controller } = setup();
+    const seq = controller.getState().selectionSeq;
+    controller.selectFromTree(idOf(controller.getState(), "p.a"));
+    const state = controller.getState();
+    const start = INDEX_HTML.indexOf('<p class="a">');
+    expect(state.selectedLocation).toEqual({
+      filePath: "index.html",
+      start,
+      end: INDEX_HTML.indexOf("</p>", start) + 4,
+    });
+    expect(state.selectionSeq).toBe(seq + 1);
+  });
+
+  it("HTML の編集では selectionSeq が変わらない", () => {
+    const { controller } = setup();
+    controller.selectFromTree(idOf(controller.getState(), "p.b"));
+    const seq = controller.getState().selectionSeq;
+    controller.editFile("index.html", INDEX_HTML.replace("second", "second!"));
+    expect(controller.getState().selectionSeq).toBe(seq);
+    expect(controller.getState().selectedLabel).toBe("p.b");
+  });
+
+  it("JS 生成要素を選んだときは selectedLocation が null", () => {
+    const { controller } = setup();
+    const bodyId = idOf(controller.getState(), "body");
+    controller.handleFrameMessage({ type: "review:select", elementId: bodyId, generated: true });
+    expect(controller.getState().selectedLocation).toBeNull();
   });
 });

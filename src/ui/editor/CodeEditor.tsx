@@ -26,6 +26,8 @@ export interface CodeEditorProps {
   modified?: boolean;
   /** 「元に戻す」ボタンが押された。元のソースに戻した value を渡し直すのは親の役目 */
   onReset?: () => void;
+  /** false ならファイル名・「適用」・「元に戻す」の行を出さない（呼び出し側が見出しを持つとき） */
+  showToolbar?: boolean;
 }
 
 const styles = {
@@ -83,6 +85,7 @@ function TextEditor({
   readOnly = false,
   modified = false,
   onReset,
+  showToolbar = true,
 }: TextEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<EditorController | null>(null);
@@ -147,7 +150,7 @@ function TextEditor({
 
   return (
     <>
-      <div style={styles.toolbar}>
+      <div style={showToolbar ? styles.toolbar : { display: "none" }}>
         <span style={styles.path} title={path}>
           {path}
         </span>

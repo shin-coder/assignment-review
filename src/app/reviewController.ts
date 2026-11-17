@@ -38,7 +38,31 @@ const IMPLICIT_REASON = "ソースに記述のない要素にはコメントで�
 
 export type FrameSender = (message: ParentToFrameMessage) => void;
 
+/**
+ * 画面下のツールバーで選ぶツール。
+ * - "browse": 生徒のサイトをそのまま操作する（リンク・JS も動く）
+ * - "comment": 要素をクリックしてコメントを付ける
+ * - "dev": 要素をクリックしてそのコードを見る・編集する
+ */
+export type Tool = "browse" | "comment" | "dev";
+
+/** 表示中の HTML でコメントのピンを立てる位置 */
+export interface CommentPin {
+  commentId: string;
+  elementId: ElementId;
+}
+
 export interface ReviewState {
+  tool: Tool;
+  /**
+   * 利用者が要素を選び直すたびに増える番号。編集で選択中の要素の ID が変わっても増えない。
+   * 開発モードの「この要素」の編集範囲をいつ取り直すかの判断に使う
+   */
+  selectionSeq: number;
+  /** 選択中の要素のソース上の範囲。ソースに開始タグのない要素・JS 生成要素なら null */
+  selectedLocation: SourceLocation | null;
+  /** 表示中の HTML のコメントのピン（対応する要素が見つかるものだけ） */
+  pins: readonly CommentPin[];
   /** iframe が最初に開くパス。HTML がなければ null */
   entryPath: string | null;
   /** いま iframe に表示している HTML */
@@ -72,6 +96,8 @@ export interface ReviewState {
 }
 
 type Core = {
+  tool: Tool;
+  selectionSeq: number;
   entryPath: string | null;
   currentPage: string | null;
   rebuildKey: number;
@@ -105,6 +131,8 @@ export class ReviewController {
   private readonly pages = new Map<string, PageInfo>();
   private readonly listeners = new Set<() => void>();
   private sender: FrameSender | null = null;
+  /** 最後に iframe へ送った review:track の内容 */
+  private lastTrackKey: string | null = null;
   private core: Core;
   private state: ReviewState;
 
@@ -117,6 +145,8 @@ export class ReviewController {
       (initialPage && this.pages.has(initialPage) ? initialPage : null) ??
       (this.pages.has("index.html") ? "index.html" : (htmlPaths[0] ?? null));
     this.core = {
+      tool: "browse",
+      selectionSeq: 0,
       entryPath: first,
       currentPage: first,
       rebuildKey: 0,
@@ -146,6 +176,7 @@ export class ReviewController {
   /** iframe へ送る関数を設定する。iframe がないときは null */
   attachFrame(sender: FrameSender | null): void {
     this.sender = sender;
+    this.lastTrackKey = null;
   }
 
   // ---- 内部 ----
@@ -171,7 +202,29 @@ export class ReviewController {
   private commit(patch: Partial<Core>): void {
     this.core = { ...this.core, ...patch };
     this.state = this.derive();
+    this.syncTrack();
     for (const listener of [...this.listeners]) listener();
+  }
+
+  /** iframe での操作モード */
+  private frameMode(): "inspect" | "browse" {
+    return this.core.tool === "browse" ? "browse" : "inspect";
+  }
+
+  /** コメントモードの間だけ、ピンと選択中の要素の矩形を iframe に知らせてもらう */
+  private trackIds(): ElementId[] {
+    if (this.core.tool !== "comment") return [];
+    const ids = new Set(this.state.pins.map((pin) => pin.elementId));
+    if (this.state.selectedId !== null) ids.add(this.state.selectedId);
+    return [...ids];
+  }
+
+  private syncTrack(force = false): void {
+    const elementIds = this.trackIds();
+    const key = elementIds.join("\u0000");
+    if (!force && key === this.lastTrackKey) return;
+    this.lastTrackKey = key;
+    this.send({ type: "review:track", elementIds });
   }
 
   private send(message: ParentToFrameMessage): void {
@@ -184,6 +237,7 @@ export class ReviewController {
     const comments = this.store.getComments();
     const commentLabels: Record<string, string> = {};
     const commentedIds = new Set<ElementId>();
+    const pins: CommentPin[] = [];
     for (const comment of comments) {
       if (comment.status !== "active") continue;
       const target = this.pages.get(comment.location.filePath);
@@ -192,7 +246,10 @@ export class ReviewController {
       if (id === null) continue;
       const label = target.labels.get(id);
       if (label !== undefined) commentLabels[comment.id] = label;
-      if (target === page) commentedIds.add(id);
+      if (target === page) {
+        commentedIds.add(id);
+        pins.push({ commentId: comment.id, elementId: id });
+      }
     }
     const { core } = this;
     let commentDisabledReason: string | null = null;
@@ -201,6 +258,10 @@ export class ReviewController {
     const highlight =
       core.highlightOverride ?? (core.highlightHidden ? null : (info?.location ?? null));
     return {
+      tool: core.tool,
+      selectionSeq: core.selectionSeq,
+      selectedLocation: core.generated ? null : (info?.location ?? null),
+      pins,
       entryPath: core.entryPath,
       currentPage: core.currentPage,
       rebuildKey: core.rebuildKey,
@@ -256,6 +317,7 @@ export class ReviewController {
     const info = id === null ? null : (this.page()?.analysis.map.get(id) ?? null);
     const selectedId = info ? info.id : null;
     const patch: Partial<Core> = {
+      selectionSeq: this.core.selectionSeq + 1,
       selectedId,
       generated: options.generated ?? false,
       highlightHidden: options.fromEditor ?? false,
@@ -273,6 +335,20 @@ export class ReviewController {
     this.select(id);
   }
 
+  /** 選択とコメントの選択を外す（Escape） */
+  clearSelection(): void {
+    if (this.core.selectedId === null && this.core.activeCommentId === null && !this.core.generated)
+      return;
+    this.select(null);
+  }
+
+  /** ツールを切り替える。選択はそのまま残す（コメントを付けた要素をそのまま開発モードで見られる） */
+  setTool(tool: Tool): void {
+    if (tool === this.core.tool) return;
+    this.commit({ tool, hoveredId: null });
+    this.send({ type: "review:mode", mode: this.frameMode() });
+  }
+
   setHovered(id: ElementId | null): void {
     if (this.core.hoveredId === id) return;
     this.commit({ hoveredId: id });
@@ -282,10 +358,16 @@ export class ReviewController {
   handleFrameMessage(message: FrameToParentMessage): void {
     switch (message.type) {
       case "review:ready":
-        // 作り直し直後の iframe に選択の枠を付け直す
+        // 作り直し直後の iframe にモード・選択の枠・追跡する要素を付け直す
+        this.send({ type: "review:mode", mode: this.frameMode() });
         if (this.core.selectedId !== null) {
           this.send({ type: "review:highlight", elementId: this.core.selectedId });
         }
+        this.syncTrack(true);
+        break;
+      case "review:rects":
+      case "review:key":
+        // 画面（React）側で扱う
         break;
       case "review:hover": {
         const known =
@@ -329,6 +411,7 @@ export class ReviewController {
   openPage(path: string): void {
     if (!this.pages.has(path)) return;
     this.commit({
+      selectionSeq: this.core.selectionSeq + 1,
       currentPage: path,
       selectedId: null,
       generated: false,
@@ -363,6 +446,7 @@ export class ReviewController {
     if (!found || found === this.core.currentPage) return;
     // iframe はすでにそのページを表示しているので、作り直さず状態だけ合わせる
     this.commit({
+      selectionSeq: this.core.selectionSeq + 1,
       currentPage: found,
       selectedId: null,
       generated: false,
@@ -492,6 +576,7 @@ export class ReviewController {
     this.commit({
       currentPage,
       previewFiles: buildPreviewFiles(this.store.currentFiles(), this.pages),
+      selectionSeq: this.core.selectionSeq + 1,
       selectedId: null,
       generated: false,
       highlightOverride: null,
@@ -546,6 +631,7 @@ export class ReviewController {
     }
     // 見つからないコメントは、元の位置（付近）だけをエディタで示す
     this.commit({
+      selectionSeq: this.core.selectionSeq + 1,
       selectedId: null,
       generated: false,
       highlightHidden: false,

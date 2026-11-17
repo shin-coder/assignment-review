@@ -1,16 +1,16 @@
-/* コメント入力欄とコメント一覧。画面共有で読めるよう、文字は大きめにする */
+/* コメント入力欄とコメント一覧。画面共有で読めるよう、本文は大きめにする */
 
 .rc-composer,
 .rc-list,
 .rc-empty {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.6;
 }
 
 .rc-composer {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   margin: 0;
 }
 
@@ -21,80 +21,109 @@
   margin: 0;
 }
 
+.rc-composer-target {
+  color: #52525b;
+  font-size: 14px;
+}
+
 .rc-composer-reason {
   padding: 8px 12px;
-  border-radius: 6px;
-  background: #fff4e5;
-  color: #7a4100;
-  font-weight: bold;
+  border-radius: 8px;
+  background: #fff4e2;
+  color: #8a4b00;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .rc-label {
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-weight: bold;
-  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 700;
+  color: #2563eb;
   word-break: break-all;
 }
 
 .rc-textarea {
   box-sizing: border-box;
   width: 100%;
-  padding: 8px 12px;
-  border: 2px solid #9ca3af;
-  border-radius: 6px;
+  padding: 10px 12px;
+  border: 1px solid #cfcfd6;
+  border-radius: 10px;
+  background: #fff;
   font: inherit;
-  font-size: 20px;
+  font-size: 17px;
   resize: vertical;
 }
 
+.rc-textarea:focus {
+  border-color: #2563eb;
+  outline: 2px solid #c7d7fe;
+  outline-offset: 0;
+}
+
 .rc-textarea:disabled {
-  background: #f3f4f6;
+  background: #f6f6f8;
   cursor: not-allowed;
 }
 
 .rc-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
 }
 
 .rc-button {
-  min-height: 40px;
-  padding: 4px 16px;
-  border: 2px solid #9ca3af;
-  border-radius: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #cfcfd6;
+  border-radius: 8px;
   background: #fff;
-  color: #111827;
+  color: #18181b;
   font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
 }
 
+.rc-button:hover:not(:disabled) {
+  background: #f6f6f8;
+}
+
 .rc-button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .rc-button-primary {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
+  border-color: #2563eb;
+  background: #2563eb;
   color: #fff;
 }
 
+.rc-button-primary:hover:not(:disabled) {
+  background: #1d4fd7;
+}
+
 .rc-button-danger {
-  border-color: #b91c1c;
-  color: #b91c1c;
+  border-color: transparent;
+  background: transparent;
+  color: #dc2626;
+}
+
+.rc-button-danger:hover:not(:disabled) {
+  background: #fdecec;
 }
 
 .rc-confirm .rc-button-danger {
-  background: #b91c1c;
+  background: #dc2626;
   color: #fff;
 }
 
 .rc-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -105,26 +134,53 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  border: 2px solid #d1d5db;
-  border-radius: 8px;
+  border: 1px solid #e2e2e7;
+  border-radius: 12px;
   background: #fff;
 }
 
 .rc-item-active {
-  border-color: #1d4ed8;
-  box-shadow: 0 0 0 3px #bfdbfe;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px #dbe6ff;
 }
 
 .rc-item-orphaned {
   border-style: dashed;
-  background: #f9fafb;
+  background: #fafafa;
 }
 
 .rc-item-main {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   width: 100%;
+}
+
+.rc-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rc-number {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50% 50% 50% 3px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rc-time {
+  margin-left: auto;
+  color: #8b8b94;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .rc-select {
@@ -138,7 +194,7 @@
 }
 
 .rc-body {
-  font-size: 20px;
+  font-size: 17px;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -146,26 +202,28 @@
 .rc-orphaned {
   align-self: flex-start;
   padding: 2px 8px;
-  border-radius: 4px;
-  background: #fee2e2;
-  color: #991b1b;
-  font-weight: bold;
+  border-radius: 6px;
+  background: #fdecec;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .rc-item-orphaned .rc-body {
-  color: #6b7280;
+  color: #71717a;
 }
 
 .rc-confirm {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: #fef2f2;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fdecec;
 }
 
 .rc-confirm-message {
   color: #991b1b;
-  font-weight: bold;
+  font-size: 14px;
+  font-weight: 700;
 }

@@ -1,30 +1,84 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { PreviewFrame as DefaultPreviewFrame } from "../preview";
-import type { ParentToFrameMessage } from "../shared";
+import type { FrameToParentMessage, ParentToFrameMessage } from "../shared";
 import type { SourceStore } from "../store";
-import { CommentComposer, CommentList } from "../ui/comments";
-import { CodeEditor, FileTabs } from "../ui/editor";
-import { LayerTree } from "../ui/layer-tree";
+import { sortComments } from "../ui/comments/sortComments";
+import { CommentLayer } from "../ui/review/CommentLayer";
+import { CommentPanel } from "../ui/review/CommentPanel";
+import { DevPanel, type DevView } from "../ui/review/DevPanel";
+import { DeviceCanvas } from "../ui/review/DeviceCanvas";
+import { DEVICES, type DeviceId } from "../ui/review/devices";
+import { ProjectMenu, type SaveStatus } from "../ui/review/ProjectMenu";
+import { createRectStore } from "../ui/review/rectStore";
+import { Toolbar } from "../ui/review/Toolbar";
 import type { AppDeps } from "./deps";
-import { isHtmlPath } from "./previewFiles";
-import { ReviewController } from "./reviewController";
+import { ReviewController, type Tool } from "./reviewController";
 
 export interface ReviewScreenProps {
   store: SourceStore;
   deps: AppDeps;
   workerReady: Promise<unknown>;
+  saveStatus: SaveStatus;
+  saveError: string | null;
+  busy: boolean;
+  canOpenFolder: boolean;
+  onOpenFolder: () => void;
   onDeleteProject: () => void;
 }
 
-type Confirming = "reset" | "delete" | null;
+const TOOL_KEYS: Record<string, Tool> = { v: "browse", c: "comment", d: "dev" };
+const DEVICE_STORAGE_KEY = "review-tool:device";
 
-/** 1 つのプロジェクトのレビュー画面。左: レイヤーツリー / 中央: プレビュー / 右: エディタとコメント */
-export function ReviewScreen({ store, deps, workerReady, onDeleteProject }: ReviewScreenProps) {
+function loadDevice(): DeviceId {
+  try {
+    const saved = localStorage.getItem(DEVICE_STORAGE_KEY);
+    return DEVICES.some((device) => device.id === saved) ? (saved as DeviceId) : "pc";
+  } catch {
+    return "pc";
+  }
+}
+
+function saveDevice(device: DeviceId): void {
+  try {
+    localStorage.setItem(DEVICE_STORAGE_KEY, device);
+  } catch {
+    // 保存できなくても困らない（次回は PC から始まるだけ）
+  }
+}
+
+/** キー入力が文字の入力欄（エディタを含む）に向いているか */
+function isTyping(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return (
+    target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])") !==
+    null
+  );
+}
+
+/**
+ * 1 つのプロジェクトのレビュー画面。プレビューを画面いっぱいに置き、
+ * 下のツールバーで「操作 / コメント / 開発」とプレビューの幅を切り替える。
+ * 右のパネルはコメント・開発モードのときだけ出す
+ */
+export function ReviewScreen({
+  store,
+  deps,
+  workerReady,
+  saveStatus,
+  saveError,
+  busy,
+  canOpenFolder,
+  onOpenFolder,
+  onDeleteProject,
+}: ReviewScreenProps) {
   const [controller] = useState(() => new ReviewController({ store, isDev: deps.isDev }));
   const state = useSyncExternalStore(controller.subscribe, controller.getState);
+  const [rects] = useState(createRectStore);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const [confirming, setConfirming] = useState<Confirming>(null);
+  const [device, setDevice] = useState<DeviceId>(loadDevice);
+  const [devView, setDevView] = useState<DevView>("element");
   const { postToFrame } = deps;
+  const { tool } = state;
 
   // iframe への送信を結びつける（iframe は作り直されるので、送る時点の要素を使う）
   useEffect(() => {
@@ -35,90 +89,118 @@ export function ReviewScreen({ store, deps, workerReady, onDeleteProject }: Revi
     return () => controller.attachFrame(null);
   }, [controller, postToFrame]);
 
+  function changeDevice(next: DeviceId) {
+    setDevice(next);
+    saveDevice(next);
+  }
+
+  // ショートカット: V / C / D でツール、1 / 2 / 3 で幅、Escape で選択を外す
+  function handleKey(key: string) {
+    const nextTool = TOOL_KEYS[key];
+    if (nextTool) {
+      controller.setTool(nextTool);
+      return;
+    }
+    const nextDevice = DEVICES.find((d) => d.shortcut === key);
+    if (nextDevice) {
+      changeDevice(nextDevice.id);
+      return;
+    }
+    if (key === "Escape") controller.clearSelection();
+  }
+  const handleKeyRef = useRef(handleKey);
+  useEffect(() => {
+    handleKeyRef.current = handleKey;
+  });
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.isComposing || isTyping(event.target)) return;
+      if (document.querySelector("[aria-modal='true']")) return;
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      if (key in TOOL_KEYS || key === "Escape" || DEVICES.some((d) => d.shortcut === key)) {
+        handleKeyRef.current(key);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  function handleFrameMessage(message: FrameToParentMessage) {
+    switch (message.type) {
+      case "review:rects":
+        rects.set(message.rects);
+        return;
+      case "review:key":
+        handleKey(message.key);
+        return;
+      case "review:select":
+        // 開発モードでプレビューの要素を選んだら、その要素のコードを出す
+        if (tool === "dev") setDevView("element");
+        break;
+    }
+    controller.handleFrameMessage(message);
+  }
+
+  const sorted = useMemo(() => sortComments([...state.comments]), [state.comments]);
+  const numbers = useMemo(() => {
+    const result: Record<string, number> = {};
+    sorted.forEach((comment, index) => (result[comment.id] = index + 1));
+    return result;
+  }, [sorted]);
+
   const Frame = deps.PreviewFrame ?? DefaultPreviewFrame;
-  const { activePath } = state;
-  const activeValue = activePath === null ? undefined : store.getEdited(activePath);
-  const activeMime =
-    activePath !== null && typeof activeValue !== "string"
-      ? store.currentFiles().find((file) => file.path === activePath)?.mimeType
-      : undefined;
-  const closedTextPaths = store
-    .paths()
-    .filter((path) => !state.openPaths.includes(path) && typeof store.getEdited(path) === "string");
 
   return (
-    <div className="review" data-testid="review-screen">
-      <div className="review-toolbar">
-        {state.htmlPaths.length > 1 && (
-          <label>
-            表示するページ{" "}
-            <select
-              data-testid="page-select"
-              value={state.currentPage ?? ""}
-              onChange={(event) => controller.openPage(event.target.value)}
-            >
-              {state.htmlPaths.map((path) => (
-                <option key={path} value={path}>
-                  {path}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <span className="spacer" />
-        {confirming === "reset" ? (
-          <ConfirmRow
-            label="すべての編集を元に戻しますか？（コメントは残ります）"
-            testId="reset-all-confirm"
-            onConfirm={() => {
-              setConfirming(null);
-              controller.resetAll();
-            }}
-            onCancel={() => setConfirming(null)}
-          />
-        ) : confirming === "delete" ? (
-          <ConfirmRow
-            label="このプロジェクトを削除しますか？（編集とコメントも消えます）"
-            testId="delete-project-confirm"
-            onConfirm={() => {
-              setConfirming(null);
-              onDeleteProject();
-            }}
-            onCancel={() => setConfirming(null)}
-          />
+    <div className="review" data-testid="review-screen" data-tool={tool}>
+      <div className="stage">
+        <ProjectMenu
+          name={store.name}
+          saveStatus={saveStatus}
+          saveError={saveError}
+          hasEdits={store.editedPaths().length > 0}
+          pages={state.htmlPaths}
+          currentPage={state.currentPage}
+          onPageChange={(path) => controller.openPage(path)}
+          busy={busy}
+          canOpenFolder={canOpenFolder}
+          onOpenFolder={onOpenFolder}
+          onResetAll={() => controller.resetAll()}
+          onDeleteProject={onDeleteProject}
+        />
+
+        {state.entryPath === null ? (
+          <p role="alert" className="stage-message">
+            プレビューできる HTML ファイルがありません
+          </p>
         ) : (
-          <>
-            <button type="button" data-testid="reset-all" onClick={() => setConfirming("reset")}>
-              すべての編集を元に戻す
-            </button>
-            <button
-              type="button"
-              data-testid="delete-project"
-              onClick={() => setConfirming("delete")}
-            >
-              このプロジェクトを削除
-            </button>
-          </>
-        )}
-      </div>
-
-      <div className="review-body">
-        <aside className="pane pane-left" aria-label="レイヤーツリー">
-          <LayerTree
-            key={state.currentPage ?? ""}
-            nodes={state.tree}
-            selectedId={state.selectedId}
-            hoveredId={state.hoveredId}
-            commentedIds={state.commentedIds}
-            onSelect={(id) => controller.selectFromTree(id)}
-            onHover={(id) => controller.setHovered(id)}
-          />
-        </aside>
-
-        <main className="pane-center">
-          {state.entryPath === null ? (
-            <p role="alert">プレビューできる HTML ファイルがありません</p>
-          ) : (
+          <DeviceCanvas
+            device={device}
+            overlay={
+              tool === "comment"
+                ? (geometry) => (
+                    <CommentLayer
+                      geometry={geometry}
+                      rects={rects}
+                      pins={state.pins}
+                      comments={state.comments}
+                      numbers={numbers}
+                      labels={state.commentLabels}
+                      activeCommentId={state.activeCommentId}
+                      selectedId={state.selectedId}
+                      selectedLabel={state.selectedLabel}
+                      disabledReason={state.commentDisabledReason}
+                      generated={state.generatedNotice !== null}
+                      onSelectComment={(id) => controller.selectComment(id)}
+                      onAddComment={(body) => controller.addComment(body)}
+                      onUpdateComment={(id, body) => controller.updateComment(id, body)}
+                      onDeleteComment={(id) => controller.deleteComment(id)}
+                      onClose={() => controller.clearSelection()}
+                    />
+                  )
+                : undefined
+            }
+          >
             <Frame
               className="preview"
               sessionId={store.projectId}
@@ -128,7 +210,7 @@ export function ReviewScreen({ store, deps, workerReady, onDeleteProject }: Revi
               rebuildKey={state.rebuildKey}
               ref={iframeRef}
               sendFiles={deps.sendFiles}
-              onMessage={(message) => controller.handleFrameMessage(message)}
+              onMessage={handleFrameMessage}
               onLoad={(iframe) => {
                 try {
                   controller.notifyFramePath(
@@ -140,102 +222,43 @@ export function ReviewScreen({ store, deps, workerReady, onDeleteProject }: Revi
                 }
               }}
             />
-          )}
-        </main>
+          </DeviceCanvas>
+        )}
 
-        <aside className="pane pane-right">
-          <section className="editor-area" aria-label="コードエディタ">
-            <FileTabs
-              files={state.openPaths.map((path) => ({ path, modified: store.isEdited(path) }))}
-              activePath={activePath}
-              onSelect={(path) => controller.openFile(path)}
-              onClose={(path) => controller.closeFile(path)}
-            />
-            {closedTextPaths.length > 0 && (
-              <select
-                data-testid="open-file-select"
-                aria-label="ファイルを開く"
-                value=""
-                onChange={(event) => controller.openFile(event.target.value)}
-              >
-                <option value="">ファイルを開く…</option>
-                {closedTextPaths.map((path) => (
-                  <option key={path} value={path}>
-                    {path}
-                  </option>
-                ))}
-              </select>
-            )}
-            {state.generatedNotice && (
-              <p role="status" className="notice" data-testid="generated-notice">
-                {state.generatedNotice}
-              </p>
-            )}
-            {state.message && (
-              <p role="alert" className="notice" data-testid="app-message">
-                {state.message}
-              </p>
-            )}
-            <div className="editor-host">
-              {activePath !== null && activeValue !== undefined && (
-                <CodeEditor
-                  path={activePath}
-                  value={activeValue}
-                  mimeType={activeMime}
-                  // ファイルを切り替えた直後に前のファイルの保留中の変更（JS の未適用の変更を含む）が
-                  // 届くことがあるため、現在の activePath ではなく、渡された path で振り分ける
-                  onChange={(text, path) => controller.editFile(path, text)}
-                  highlight={state.highlight}
-                  onCursorChange={
-                    isHtmlPath(activePath)
-                      ? (offset) => controller.cursorMoved(activePath, offset)
-                      : undefined
-                  }
-                  modified={store.isEdited(activePath)}
-                  onReset={() => {
-                    const original = store.getOriginal(activePath);
-                    if (typeof original === "string") controller.editFile(activePath, original);
-                  }}
-                />
-              )}
-            </div>
-          </section>
-          <section className="comment-area" aria-label="コメント">
-            <CommentComposer
-              targetLabel={state.selectedLabel}
-              disabledReason={state.commentDisabledReason}
-              onSubmit={(body) => controller.addComment(body)}
-            />
-            <CommentList
-              comments={[...state.comments]}
-              labels={state.commentLabels}
-              activeId={state.activeCommentId}
-              onSelect={(id) => controller.selectComment(id)}
-              onDelete={(id) => controller.deleteComment(id)}
-              onUpdate={(id, body) => controller.updateComment(id, body)}
-            />
-          </section>
-        </aside>
+        {state.message && tool !== "dev" && (
+          <p role="alert" className="toast stage-toast" data-testid="app-message">
+            {state.message}
+          </p>
+        )}
+
+        <Toolbar
+          tool={tool}
+          onToolChange={(next) => controller.setTool(next)}
+          device={device}
+          onDeviceChange={changeDevice}
+        />
       </div>
-    </div>
-  );
-}
 
-function ConfirmRow(props: {
-  label: string;
-  testId: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <span role="group" aria-label={props.label}>
-      {props.label}{" "}
-      <button type="button" data-testid={props.testId} onClick={props.onConfirm}>
-        実行する
-      </button>{" "}
-      <button type="button" onClick={props.onCancel}>
-        キャンセル
-      </button>
-    </span>
+      {tool === "comment" && (
+        <CommentPanel
+          comments={sorted}
+          labels={state.commentLabels}
+          numbers={numbers}
+          activeId={state.activeCommentId}
+          onSelect={(id) => controller.selectComment(id)}
+          onDelete={(id) => controller.deleteComment(id)}
+          onUpdate={(id, body) => controller.updateComment(id, body)}
+        />
+      )}
+      {tool === "dev" && (
+        <DevPanel
+          store={store}
+          controller={controller}
+          state={state}
+          view={devView}
+          onViewChange={setDevView}
+        />
+      )}
+    </div>
   );
 }

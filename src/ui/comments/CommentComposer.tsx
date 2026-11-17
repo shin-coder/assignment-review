@@ -9,13 +9,26 @@ export interface CommentComposerProps {
   disabledReason: string | null;
   /** 前後の空白を取り除いた本文で呼ばれる。空の本文では呼ばれない */
   onSubmit: (body: string) => void;
+  /** 渡したときだけ「キャンセル」ボタンを出す */
+  onCancel?: () => void;
+  /** 表示したときに入力欄へフォーカスする */
+  autoFocus?: boolean;
+  /** コメントできない理由の欄に付ける data-testid */
+  reasonTestId?: string;
 }
 
 /** 要素を選んでいないときに表示する理由 */
 export const NO_TARGET_REASON = "コメントする要素を選択してください";
 
 /** 選択中の要素へのコメント入力欄 */
-export function CommentComposer({ targetLabel, disabledReason, onSubmit }: CommentComposerProps) {
+export function CommentComposer({
+  targetLabel,
+  disabledReason,
+  onSubmit,
+  onCancel,
+  autoFocus = false,
+  reasonTestId,
+}: CommentComposerProps) {
   const [draft, setDraft] = useState("");
   const reasonId = useId();
   const reason = disabledReason ?? (targetLabel === null ? NO_TARGET_REASON : null);
@@ -46,7 +59,7 @@ export function CommentComposer({ targetLabel, disabledReason, onSubmit }: Comme
         対象: <span className="rc-label">{targetLabel ?? "なし"}</span>
       </p>
       {reason !== null && (
-        <p id={reasonId} className="rc-composer-reason" role="status">
+        <p id={reasonId} className="rc-composer-reason" role="status" data-testid={reasonTestId}>
           {reason}
         </p>
       )}
@@ -57,11 +70,17 @@ export function CommentComposer({ targetLabel, disabledReason, onSubmit }: Comme
         placeholder={disabled ? "" : "コメントを入力（Ctrl / Cmd + Enter で追加）"}
         value={draft}
         disabled={disabled}
+        autoFocus={autoFocus && !disabled}
         rows={3}
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={handleKeyDown}
       />
       <div className="rc-actions">
+        {onCancel && (
+          <button type="button" className="rc-button" onClick={onCancel}>
+            キャンセル
+          </button>
+        )}
         <button type="submit" className="rc-button rc-button-primary" disabled={!canSubmit}>
           コメントを追加
         </button>

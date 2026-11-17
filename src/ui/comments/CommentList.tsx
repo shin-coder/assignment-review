@@ -16,6 +16,12 @@ export interface CommentListProps {
   onDelete: (id: string) => void;
   /** 編集を保存したときに、前後の空白を取り除いた本文で呼ばれる。空の本文や変更なしでは呼ばれない */
   onUpdate: (id: string, body: string) => void;
+  /** コメント ID → 番号（ピンと同じ番号）。渡したときだけ番号を出す */
+  numbers?: Record<string, number>;
+  /** 一覧のアクセシブルな名前 */
+  ariaLabel?: string;
+  /** コメントの時刻の表示。渡したときだけ出す */
+  formatTime?: (time: number) => string;
 }
 
 /** 対応する箇所が編集で消えたコメントに表示する文言 */
@@ -29,6 +35,9 @@ export function CommentList({
   onSelect,
   onDelete,
   onUpdate,
+  numbers,
+  ariaLabel = "コメント一覧",
+  formatTime,
 }: CommentListProps) {
   const sorted = useMemo(() => sortComments(comments), [comments]);
 
@@ -37,7 +46,7 @@ export function CommentList({
   }
 
   return (
-    <ul className="rc-list" aria-label="コメント一覧">
+    <ul className="rc-list" aria-label={ariaLabel}>
       {sorted.map((comment) => (
         <CommentItem
           key={comment.id}
@@ -47,6 +56,8 @@ export function CommentList({
           onSelect={onSelect}
           onDelete={onDelete}
           onUpdate={onUpdate}
+          number={numbers?.[comment.id]}
+          time={formatTime?.(comment.createdAt)}
         />
       ))}
     </ul>
@@ -70,9 +81,20 @@ interface CommentItemProps {
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, body: string) => void;
+  number?: number;
+  time?: string;
 }
 
-function CommentItem({ comment, label, active, onSelect, onDelete, onUpdate }: CommentItemProps) {
+function CommentItem({
+  comment,
+  label,
+  active,
+  onSelect,
+  onDelete,
+  onUpdate,
+  number,
+  time,
+}: CommentItemProps) {
   const [mode, setMode] = useState<ItemMode>("view");
   const [draft, setDraft] = useState("");
   const orphaned = comment.status === "orphaned";
@@ -135,7 +157,15 @@ function CommentItem({ comment, label, active, onSelect, onDelete, onUpdate }: C
           className="rc-item-main rc-select"
           onClick={() => onSelect(comment.id)}
         >
-          <span className="rc-label">{label}</span>
+          <span className="rc-item-head">
+            {number !== undefined && (
+              <span className="rc-number" aria-label={`コメント ${number}`}>
+                {number}
+              </span>
+            )}
+            <span className="rc-label">{label}</span>
+            {time && <span className="rc-time">{time}</span>}
+          </span>
           {orphaned && <span className="rc-orphaned">{ORPHANED_MESSAGE}</span>}
           <span className="rc-body">{comment.body}</span>
         </button>

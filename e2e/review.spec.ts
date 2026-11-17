@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
+  chooseTool,
+  elementCode,
   openApp,
   openFile,
   pickFolderAndWaitPreview,
@@ -15,24 +17,39 @@ const BLUE = "rgb(0, 0, 255)";
 const RED = "rgb(255, 0, 0)";
 
 test.describe("必須シナリオ", () => {
-  test("iframe 内の要素をクリックすると、レイヤーツリーの該当ノードが選択される", async ({
+  test("開発モードで iframe 内の要素をクリックすると、その要素のコードだけが表示される", async ({
     page,
   }) => {
     await openApp(page, "simple-image");
     await pickFolderAndWaitPreview(page);
-
-    const selected = page.getByRole("treeitem", { selected: true });
-    await expect(selected).toHaveCount(0);
+    await chooseTool(page, "dev");
 
     await previewFrame(page).locator("#title").click();
-    await expect(selected).toHaveCount(1);
-    await expect(selected).toContainText("h1");
-    await expect(selected).toHaveAttribute("aria-selected", "true");
+    await expect(elementCode(page)).toContainText('<h1 id="title"');
+    await expect(elementCode(page)).not.toContainText("<body");
 
-    // 別の要素に変えると、選択も移る
+    // 別の要素に変えると、表示も移る
     await previewFrame(page).locator(".lead").click();
-    await expect(selected).toHaveCount(1);
-    await expect(selected).toContainText("lead");
+    await expect(elementCode(page)).toContainText('class="lead"');
+    await expect(elementCode(page)).not.toContainText('<h1 id="title"');
+  });
+
+  test("要素のコードを編集すると、プレビューに反映され、ファイル全体にも入る", async ({ page }) => {
+    await openApp(page, "simple-image");
+    await pickFolderAndWaitPreview(page);
+    await chooseTool(page, "dev");
+    await previewFrame(page).locator("#title").click();
+    await expect(elementCode(page)).toContainText('<h1 id="title"');
+
+    const code = await elementCode(page).evaluate((element) => (element as HTMLElement).innerText);
+    await elementCode(page).click();
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.insertText(code.replace(/>[^<]*<\/h1>/, ">要素だけ編集</h1>"));
+
+    await expect(previewFrame(page).locator("#title")).toHaveText("要素だけ編集");
+    await openFile(page, "index.html");
+    await expect.poll(() => readEditorText(page)).toContain("要素だけ編集</h1>");
+    await expect.poll(() => readEditorText(page)).toContain("<body");
   });
 
   test("CSS を編集すると、iframe 内の計算済みスタイルが変わる", async ({ page }) => {
@@ -85,6 +102,7 @@ test.describe("必須シナリオ", () => {
     await pickFolderAndWaitPreview(page);
 
     // コメントを付ける
+    await chooseTool(page, "comment");
     await previewFrame(page).locator("#title").click();
     await page.getByRole("textbox", { name: "コメント", exact: true }).fill("見出しの色を確認");
     await page.getByRole("button", { name: "コメントを追加" }).click();
@@ -107,15 +125,19 @@ test.describe("必須シナリオ", () => {
     expect((await readPickerRecord(page)).pickerCalls).toBe(0);
     await expect(previewFrame(page).locator("#title")).toBeVisible();
     await expect.poll(() => titleColor(page)).toBe(RED);
+    await chooseTool(page, "comment");
     await expect(page.getByRole("list", { name: "コメント一覧" })).toContainText(
       "見出しの色を確認",
     );
-    // コメントを選ぶと、対象の要素がツリーで選択され、コメントの目印が付く
-    // （初期表示では折りたたまれた枝にあるため、選ぶまでは行が描画されない）
-    await page.getByRole("button", { name: /見出しの色を確認/ }).click();
-    const selected = page.getByRole("treeitem", { selected: true });
-    await expect(selected).toContainText("h1");
-    await expect(selected).toHaveAttribute("data-commented", "true");
+    // 対象の要素にコメントのピンが立ち、一覧で選ぶとピンが選択状態になる
+    const pin = page.getByRole("button", { name: /コメント 1を開く/ });
+    await expect(pin).toBeVisible();
+    await page
+      .getByRole("list", { name: "コメント一覧" })
+      .getByRole("button", { name: /見出しの色を確認/ })
+      .click();
+    await expect(pin).toHaveAttribute("data-active", "true");
+    await expect(page.getByRole("dialog", { name: "コメント" })).toContainText("見出しの色を確認");
 
     // エディタにも編集後のソースが入っている
     await openFile(page, "css/style.css");
@@ -159,11 +181,47 @@ test.describe("必須シナリオ", () => {
 });
 
 test.describe("追加シナリオ", () => {
+  test("プレビューの幅を PC / タブレット / モバイルで切り替えられる", async ({ page }) => {
+    await openApp(page, "simple-image");
+    await pickFolderAndWaitPreview(page);
+    const width = () =>
+      previewFrame(page)
+        .locator("html")
+        .evaluate(() => window.innerWidth);
+
+    await expect.poll(width).toBe(1440);
+    await page.getByTestId("device-tablet").click();
+    await expect.poll(width).toBe(768);
+    await page.getByTestId("device-mobile").click();
+    await expect.poll(width).toBe(390);
+    await page.getByTestId("device-pc").click();
+    await expect.poll(width).toBe(1440);
+  });
+
+  test("操作モードでは生徒のサイトの JS が動き、コメントモードではクリックが止まる", async ({
+    page,
+  }) => {
+    await openApp(page, "js-slider");
+    await pickFolderAndWaitPreview(page);
+    const frame = previewFrame(page);
+    await expect(frame.locator(".dot")).toHaveCount(3);
+
+    await chooseTool(page, "browse");
+    await frame.locator(".next").click();
+    await expect(frame.locator("#slide-2")).toHaveClass(/is-active/);
+
+    await chooseTool(page, "comment");
+    await frame.locator(".next").click();
+    await expect(frame.locator("#slide-2")).toHaveClass(/is-active/);
+    await expect(page.getByTestId("comment-composer")).toContainText("button.next");
+  });
+
   test("JS が生成した要素をクリックすると対象外の案内が出て、コメントできない", async ({
     page,
   }) => {
     await openApp(page, "js-slider");
     await pickFolderAndWaitPreview(page);
+    await chooseTool(page, "comment");
 
     await expect(previewFrame(page).locator(".dot")).toHaveCount(3);
     await previewFrame(page).locator(".dot").first().click();
@@ -185,17 +243,15 @@ test.describe("追加シナリオ", () => {
     const frame = previewFrame(page);
     await expect(frame.locator(".nav-link")).toHaveCount(3);
     expect(await titleColor(page)).toBe(BLUE);
-    await expect(page.getByRole("treeitem").first()).toBeVisible();
+    await chooseTool(page, "dev");
 
-    const selected = page.getByRole("treeitem", { selected: true });
     await frame.locator(".nav-link").nth(1).click();
-    await expect(selected).toHaveCount(1);
-    await expect(selected).toContainText("nav-link");
+    await expect(elementCode(page)).toContainText("プロフィール");
+    await expect(elementCode(page)).not.toContainText("作品");
 
     // 暗黙に作られた要素の中の要素（tbody の下）も選べる
     await frame.locator(".skills th").first().click();
-    await expect(selected).toHaveCount(1);
-    await expect(selected).toContainText("th");
+    await expect(elementCode(page)).toContainText("<th>HTML");
   });
 
   test("フォルダの読み込みでは、書き込み系のメソッドが呼ばれない", async ({ page }) => {

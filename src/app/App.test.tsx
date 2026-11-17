@@ -1,6 +1,6 @@
 // 結合テスト: 各層の実物（解析・編集・コメント・保存・UI）をつなぎ、
 // iframe と Service Worker が絡む部分（PreviewFrame・コードエディタ）だけを差し替える
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useLayoutEffect, type Ref } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeDirectory, type WriteCall } from "../loader/fakeHandles";
@@ -9,8 +9,8 @@ import type { ParentToFrameMessage } from "../shared";
 import { IndexedDbProjectRepository } from "../store";
 import { App } from "./App";
 import type { AppDeps } from "./deps";
+import { analyzePage } from "./previewFiles";
 import { createStore, idOf, INDEX_HTML } from "./testUtils";
-import type { ReviewState } from "./reviewController";
 
 // コードエディタ（CodeMirror）は jsdom で動かさず、渡された props を見て onChange を呼べる偽物にする
 let editorProps: {
@@ -86,23 +86,34 @@ async function restoreProject(deps: AppDeps) {
   await deps.repository.save(createStore().toSnapshot());
   render(<App deps={deps} />);
   await screen.findByTestId("review-screen");
+  // 画面は act の外（IndexedDB の読み込みの後）で描かれるため、購読などの effect を流し切ってから操作する
+  await act(async () => {});
 }
 
-function currentState(): Pick<ReviewState, "tree"> {
-  // ツリーの ID は画面の data-layer-id から作る（表示名は label から）
-  const rows = [...document.querySelectorAll<HTMLElement>("[data-layer-id]")];
-  return {
-    tree: rows.map((row) => ({
-      id: row.dataset.layerId!,
-      label: row.querySelector(".layer-tree__label")!.textContent!,
-      children: [],
-    })),
-  };
+/** HTML を解析した要素の ID（プレビューに付く data-review-id と同じ） */
+function idIn(html: string, prefix: string): string {
+  return idOf({ tree: analyzePage("index.html", html, false).analysis.tree }, prefix);
+}
+
+function chooseTool(tool: "browse" | "comment" | "dev") {
+  fireEvent.click(screen.getByTestId(`tool-${tool}`));
+  expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", tool);
+}
+
+/** 開発モードの「ファイル」を開き、エディタ（偽物）が出るのを待つ */
+async function openFileView() {
+  chooseTool("dev");
+  fireEvent.click(screen.getByTestId("dev-view-file"));
+  await screen.findByTestId("fake-editor");
+}
+
+function openMenu() {
+  fireEvent.click(screen.getByTestId("project-menu"));
 }
 
 beforeEach(() => {
-  // jsdom には scrollIntoView がない（レイヤーツリーが選択ノードをスクロールする）
   Element.prototype.scrollIntoView = vi.fn();
+  localStorage.clear();
   editorProps = null;
   frameProps = null;
 });
@@ -132,11 +143,13 @@ describe("起動", () => {
     await deps.repository.save(store.toSnapshot());
     render(<App deps={deps} />);
     await screen.findByTestId("review-screen");
+    await act(async () => {});
     expect(frameProps?.entryPath).toBe("index.html");
     expect(frameProps?.sessionId).toBe("project-1");
     expect(frameProps?.files.find((f) => f.path === "style.css")?.content).toBe(
       "h1 { color: green; }",
     );
+    chooseTool("comment");
     expect(screen.getByText("復元されるコメント")).toBeInTheDocument();
     expect(screen.getByTestId("save-status")).toHaveTextContent("保存済み");
   });
@@ -145,7 +158,61 @@ describe("起動", () => {
     const { deps } = createDeps();
     render(<App deps={deps} />);
     expect(await screen.findByText(/フォルダを選んでください/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "生徒サイト レビューツール" })).toBeInTheDocument();
     expect(screen.queryByTestId("review-screen")).toBeNull();
+  });
+
+  it("レビュー画面にはヘッダーもレイヤーツリーも出さず、パネルはモードに応じて出す", async () => {
+    const { deps } = createDeps();
+    await restoreProject(deps);
+    expect(screen.queryByRole("banner")).toBeNull();
+    expect(screen.queryByRole("tree")).toBeNull();
+    expect(screen.queryByRole("complementary")).toBeNull();
+    chooseTool("comment");
+    expect(screen.getByRole("complementary", { name: "コメント" })).toBeInTheDocument();
+    chooseTool("dev");
+    expect(screen.getByRole("complementary", { name: "開発" })).toBeInTheDocument();
+    chooseTool("browse");
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("プレビューの幅を PC / タブレット / モバイルで切り替える", async () => {
+    const { deps } = createDeps();
+    await restoreProject(deps);
+    const device = () => document.querySelector<HTMLElement>(".device")!;
+    expect(device().dataset.device).toBe("pc");
+    expect(document.querySelector<HTMLElement>(".device-viewport")!.style.width).toBe("1440px");
+    fireEvent.click(screen.getByTestId("device-mobile"));
+    expect(device().dataset.device).toBe("mobile");
+    expect(document.querySelector<HTMLElement>(".device-viewport")!.style.width).toBe("390px");
+    fireEvent.click(screen.getByTestId("device-tablet"));
+    expect(document.querySelector<HTMLElement>(".device-viewport")!.style.width).toBe("768px");
+  });
+
+  it("V / C / D キーでツールを切り替える（入力欄の中では切り替えない）", async () => {
+    const { deps, posted } = createDeps();
+    await restoreProject(deps);
+    fireEvent.keyDown(window, { key: "c" });
+    expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "comment");
+    expect(posted).toContainEqual({ type: "review:mode", mode: "inspect" });
+    fireEvent.keyDown(window, { key: "d" });
+    expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "dev");
+    fireEvent.keyDown(window, { key: "v" });
+    expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "browse");
+
+    chooseTool("comment");
+    selectFromFrame(idIn(INDEX_HTML, "p.a"));
+    const textbox = await screen.findByRole("textbox", { name: "コメント" });
+    fireEvent.keyDown(textbox, { key: "d" });
+    expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "comment");
+  });
+
+  it("iframe から転送されたキーでもツールを切り替える", async () => {
+    const { deps } = createDeps();
+    await restoreProject(deps);
+    const iframe = screen.getByTestId("fake-iframe") as HTMLIFrameElement;
+    act(() => frameProps!.onMessage!({ type: "review:key", key: "d" }, iframe));
+    expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "dev");
   });
 
   it("showDirectoryPicker がないブラウザでは案内を出し、ボタンを無効にする", async () => {
@@ -197,7 +264,8 @@ describe("フォルダの読み込み", () => {
     render(<App deps={deps} />);
     fireEvent.click(await screen.findByTestId("open-folder"));
     await waitFor(() => expect(frameProps?.sessionId).toBe("id-1"));
-    fireEvent.click(screen.getByTestId("open-folder"));
+    openMenu();
+    fireEvent.click(screen.getByTestId("menu-open-folder"));
     await waitFor(() => expect(frameProps?.sessionId).toBe("id-2"));
     expect(clearFiles).toHaveBeenCalledWith("id-1");
     expect((await repository.loadLatest())?.projectId).toBe("id-2");
@@ -221,42 +289,102 @@ describe("フォルダの読み込み", () => {
 });
 
 describe("選択の連動", () => {
-  it("iframe の review:select でツリーの選択とエディタの強調が更新される", async () => {
+  it("開発モードで iframe の要素を選ぶと、その要素のコードだけを出し、iframe に枠を送る", async () => {
     const { deps, posted } = createDeps();
     await restoreProject(deps);
-    const id = idOf(currentState(), "p.a");
+    chooseTool("dev");
+    const id = idIn(INDEX_HTML, "p.a");
     selectFromFrame(id);
-    await waitFor(() =>
-      expect(screen.getByTestId(`layer-node-${id}`)).toHaveAttribute("aria-selected", "true"),
-    );
-    const start = INDEX_HTML.indexOf('<p class="a">');
-    expect(screen.getByTestId("fake-editor")).toHaveAttribute(
-      "data-highlight",
-      `${start}-${INDEX_HTML.indexOf("</p>", start) + 4}`,
-    );
+    await waitFor(() => expect(editorProps?.value).toBe('<p class="a">first</p>'));
+    expect(screen.getByTestId("element-code")).toBeInTheDocument();
+    expect(screen.getByText("p.a")).toBeInTheDocument();
     expect(posted).toContainEqual({ type: "review:highlight", elementId: id });
   });
 
-  it("JS 生成要素は祖先を選んで案内を出し、コメント入力を無効にする", async () => {
+  it("要素のコードを編集すると、ファイル全体のその部分だけが置き換わる", async () => {
     const { deps } = createDeps();
     await restoreProject(deps);
-    const bodyId = idOf(currentState(), "body");
-    selectFromFrame(bodyId, true);
+    chooseTool("dev");
+    selectFromFrame(idIn(INDEX_HTML, "p.b"));
+    await waitFor(() => expect(editorProps?.value).toBe('<p class="b">second</p>'));
+    act(() => editorProps!.onChange('<p class="b">2nd</p>', "index.html"));
+    const expected = INDEX_HTML.replace("second", "2nd");
+    await waitFor(() =>
+      expect(frameProps!.files.find((f) => f.path === "index.html")?.content).toContain("2nd"),
+    );
+    // 続けて編集しても、同じ要素の範囲に入る
+    act(() => editorProps!.onChange('<p class="b">two</p>', "index.html"));
+    await waitFor(() => expect(editorProps?.value).toBe('<p class="b">two</p>'));
+    fireEvent.click(screen.getByTestId("dev-view-file"));
+    await waitFor(() => expect(editorProps?.value).toBe(expected.replace("2nd", "two")));
+  });
+
+  it("コメントモードで要素を選ぶと入力欄が出る。JS 生成要素は案内を出して入力を無効にする", async () => {
+    const { deps } = createDeps();
+    await restoreProject(deps);
+    chooseTool("comment");
+    selectFromFrame(idIn(INDEX_HTML, "p.a"));
+    expect(await screen.findByTestId("comment-composer")).toHaveTextContent("p.a");
+    expect(screen.getByRole("textbox", { name: "コメント" })).toBeEnabled();
+
+    selectFromFrame(idIn(INDEX_HTML, "body"), true);
     expect(await screen.findByTestId("generated-notice")).toHaveTextContent(
       "JS が生成した要素は編集・コメントの対象外",
     );
     expect(screen.getByRole("textbox", { name: "コメント" })).toBeDisabled();
-    expect(screen.getByTestId(`layer-node-${bodyId}`)).toHaveAttribute("aria-selected", "true");
   });
 
-  it("エディタのカーソル移動でツリーが選択される", async () => {
+  it("Escape で選択を外し、入力欄を閉じる", async () => {
     const { deps } = createDeps();
     await restoreProject(deps);
-    editorProps!.onCursorChange!(INDEX_HTML.indexOf("second") + 1);
-    const id = idOf(currentState(), "p.b");
-    await waitFor(() =>
-      expect(screen.getByTestId(`layer-node-${id}`)).toHaveAttribute("aria-selected", "true"),
+    chooseTool("comment");
+    selectFromFrame(idIn(INDEX_HTML, "p.a"));
+    await screen.findByTestId("comment-composer");
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByTestId("comment-composer")).toBeNull());
+  });
+
+  it("矩形が届くと、コメントの要素にピンを立てる", async () => {
+    const { deps } = createDeps();
+    await restoreProject(deps);
+    chooseTool("comment");
+    const id = idIn(INDEX_HTML, "p.a");
+    selectFromFrame(id);
+    fireEvent.change(await screen.findByRole("textbox", { name: "コメント" }), {
+      target: { value: "ピンのテスト" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "コメントを追加" }));
+    const iframe = screen.getByTestId("fake-iframe") as HTMLIFrameElement;
+    act(() =>
+      frameProps!.onMessage!(
+        { type: "review:rects", rects: [{ elementId: id, x: 100, y: 200, width: 50, height: 20 }] },
+        iframe,
+      ),
     );
+    const pin = await screen.findByRole("button", { name: /コメント 1を開く/ });
+    expect(pin).toHaveAttribute("data-active", "true");
+    // スクロールで画面外に出たらピンを隠す
+    act(() =>
+      frameProps!.onMessage!(
+        {
+          type: "review:rects",
+          rects: [{ elementId: id, x: 100, y: -300, width: 50, height: 20 }],
+        },
+        iframe,
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /コメント 1を開く/ })).toBeNull(),
+    );
+  });
+
+  it("ファイル表示のエディタのカーソル移動で要素が選ばれる", async () => {
+    const { deps, posted } = createDeps();
+    await restoreProject(deps);
+    await openFileView();
+    act(() => editorProps!.onCursorChange!(INDEX_HTML.indexOf("second") + 1));
+    const id = idIn(INDEX_HTML, "p.b");
+    await waitFor(() => expect(posted).toContainEqual({ type: "review:highlight", elementId: id }));
   });
 });
 
@@ -264,6 +392,7 @@ describe("編集の反映", () => {
   it("CSS の編集: putFiles に渡すファイルが更新され、replace-css を送り、iframe は作り直さない", async () => {
     const { deps, posted } = createDeps();
     await restoreProject(deps);
+    await openFileView();
     const filesBefore = frameProps!.files;
     const keyBefore = frameProps!.rebuildKey;
     editorProps!.onChange("h1 { color: blue; }", "style.css");
@@ -282,6 +411,7 @@ describe("編集の反映", () => {
   it("JS の編集: iframe を作り直し、HTML/CSS の編集後ソースが送るファイルに入っている", async () => {
     const { deps } = createDeps();
     await restoreProject(deps);
+    await openFileView();
     editorProps!.onChange("h1 { color: blue; }", "style.css");
     editorProps!.onChange(INDEX_HTML.replace("title", "edited"), "index.html");
     const key = frameProps!.rebuildKey;
@@ -297,6 +427,7 @@ describe("編集の反映", () => {
   it("エディタの変更は渡された path で振り分ける", async () => {
     const { deps, repository } = createDeps();
     await restoreProject(deps);
+    await openFileView();
     // 現在のタブは index.html のまま、別ファイル（切り替え前のファイル）の変更が届く
     editorProps!.onChange("console.log(9);", "app.js");
     await waitFor(async () =>
@@ -307,7 +438,8 @@ describe("編集の反映", () => {
   it("要素の前に要素を足す編集をしても、コメントが同じ要素を指す", async () => {
     const { deps } = createDeps();
     await restoreProject(deps);
-    selectFromFrame(idOf(currentState(), "p.b"));
+    chooseTool("comment");
+    selectFromFrame(idIn(INDEX_HTML, "p.b"));
     fireEvent.change(await screen.findByRole("textbox", { name: "コメント" }), {
       target: { value: "ここ" },
     });
@@ -315,20 +447,22 @@ describe("編集の反映", () => {
     fireEvent.click(screen.getByRole("button", { name: "コメントを追加" }));
     await screen.findByText("ここ");
 
-    editorProps!.onChange(
-      INDEX_HTML.replace('<p class="b">', '<p class="new">n</p><p class="b">'),
-      "index.html",
+    await openFileView();
+    act(() =>
+      editorProps!.onChange(
+        INDEX_HTML.replace('<p class="b">', '<p class="new">n</p><p class="b">'),
+        "index.html",
+      ),
     );
-    const id = idOf(currentState(), "p.b");
-    await waitFor(() =>
-      expect(screen.getByTestId(`layer-node-${id}`)).toHaveAttribute("data-commented", "true"),
-    );
-    expect(document.querySelectorAll('[data-commented="true"]')).toHaveLength(1);
+    chooseTool("comment");
+    const list = await screen.findByRole("list", { name: "コメント一覧" });
+    await waitFor(() => expect(list).toHaveTextContent("p.b"));
   });
 
   it("編集は自動保存され、保存状態が表示される", async () => {
     const { deps, repository } = createDeps();
     await restoreProject(deps);
+    await openFileView();
     editorProps!.onChange("h1 { color: blue; }", "style.css");
     await waitFor(() => expect(screen.getByTestId("save-status")).toHaveTextContent("保存中"));
     await waitFor(() => expect(screen.getByTestId("save-status")).toHaveTextContent("保存済み"));
@@ -338,6 +472,7 @@ describe("編集の反映", () => {
   it("保存に失敗したら「保存失敗」を表示する", async () => {
     const { deps, repository } = createDeps();
     await restoreProject(deps);
+    await openFileView();
     vi.spyOn(repository, "save").mockRejectedValue(new Error("boom"));
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     editorProps!.onChange("h1 { color: blue; }", "style.css");
@@ -349,7 +484,9 @@ describe("リセットと削除", () => {
   it("すべての編集を元に戻す", async () => {
     const { deps, repository } = createDeps();
     await restoreProject(deps);
-    editorProps!.onChange("h1 { color: blue; }", "style.css");
+    await openFileView();
+    act(() => editorProps!.onChange("h1 { color: blue; }", "style.css"));
+    openMenu();
     fireEvent.click(screen.getByTestId("reset-all"));
     fireEvent.click(screen.getByTestId("reset-all-confirm"));
     await waitFor(() =>
@@ -364,6 +501,7 @@ describe("リセットと削除", () => {
     const clearFiles = vi.fn(() => Promise.resolve());
     const { deps, repository } = createDeps({ clearFiles });
     await restoreProject(deps);
+    openMenu();
     fireEvent.click(screen.getByTestId("delete-project"));
     fireEvent.click(screen.getByTestId("delete-project-confirm"));
     await screen.findByText(/フォルダを選んでください/);
