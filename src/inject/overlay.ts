@@ -1,3 +1,4 @@
+import type { FrameMode } from "../shared";
 import { describeElement } from "./dom";
 
 // ハイライトの重ね表示（オーバーレイ）。
@@ -24,8 +25,8 @@ export interface Overlay {
   draw(kind: BoxKind, element: Element | null, options?: DrawOptions): void;
   /** 生徒の JS や要素の差し替えでホスト要素が外されていたら付け直す */
   ensureAttached(): void;
-  /** 枠のラベル（要素名）を出すか */
-  setLabelsVisible(visible: boolean): void;
+  /** 操作モード。"comment" ではラベルを出さず、選択の枠を薄くする */
+  setMode(mode: FrameMode): void;
   dispose(): void;
 }
 
@@ -67,7 +68,13 @@ const SHADOW_STYLE = `
   font: 12px/1.5 system-ui, sans-serif;
   white-space: nowrap;
 }
-:host([data-labels="off"]) .label { display: none; }
+:host([data-mode="comment"]) .label { display: none; }
+:host([data-mode="comment"]) .selected {
+  --color: rgb(37 99 235 / 0.55);
+  --fill: rgb(37 99 235 / 0.06);
+  border-width: 1.5px;
+  border-radius: 4px;
+}
 .box.label-inside .label { bottom: auto; top: 0; border-radius: 0 0 3px 0; }
 `;
 
@@ -137,10 +144,7 @@ export function createOverlay(doc: Document): Overlay {
       (node instanceof Node && (host.contains(node) || node.getRootNode() === shadow)),
     draw,
     ensureAttached,
-    setLabelsVisible: (visible) => {
-      if (visible) host.removeAttribute("data-labels");
-      else host.setAttribute("data-labels", "off");
-    },
+    setMode: (mode) => host.setAttribute("data-mode", mode),
     dispose: () => host.remove(),
   };
 }

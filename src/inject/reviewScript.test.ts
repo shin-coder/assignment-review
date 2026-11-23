@@ -166,7 +166,6 @@ describe("クリック", () => {
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
       type: "review:select",
-      point: expect.anything(),
       elementId: "3",
       generated: false,
     });
@@ -180,11 +179,12 @@ describe("クリック", () => {
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
       type: "review:select",
-      point: expect.anything(),
       elementId: "3",
       generated: true,
+      // クリック位置（clientX/Y は 0）は、祖先の矩形に対する割合で送る（範囲外は 0〜1 に収める）
+      point: { x: 0, y: 0 },
     });
-    // 選択の枠は、親のレイヤーツリーで選ばれる祖先に付ける
+    // 選択の枠は、親で選ばれる祖先に付ける
     expect(box("selected").classList.contains("visible")).toBe(true);
     expect(box("selected").textContent).toBe("div#slider.slider");
   });
@@ -197,8 +197,8 @@ describe("クリック", () => {
     click(document.documentElement);
 
     expect(post.mock.calls.map(([m]) => m)).toEqual([
-      { type: "review:select", elementId: null, generated: false, point: expect.anything() },
-      { type: "review:select", elementId: null, generated: false, point: expect.anything() },
+      { type: "review:select", elementId: null, generated: false },
+      { type: "review:select", elementId: null, generated: false },
     ]);
   });
 
@@ -213,7 +213,6 @@ describe("クリック", () => {
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
       type: "review:select",
-      point: expect.anything(),
       elementId: "7",
       generated: false,
     });
@@ -226,7 +225,6 @@ describe("クリック", () => {
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
       type: "review:select",
-      point: expect.anything(),
       elementId: null,
       generated: true,
     });
@@ -668,7 +666,7 @@ describe("キーの転送", () => {
 });
 
 describe("クリックした位置", () => {
-  it("選んだ要素の左上からのずれを point で送る", () => {
+  it("選んだ要素に対する割合を point で送る", () => {
     const { post } = setup(PAGE);
     mockRect(byId("2"), rect(10, 20, 100, 40));
     byId("2").dispatchEvent(
@@ -678,15 +676,33 @@ describe("クリックした位置", () => {
       type: "review:select",
       elementId: "2",
       generated: false,
-      point: { x: 25, y: 10 },
+      point: { x: 0.25, y: 0.25 },
     });
   });
+});
 
-  it("labels: false のモードでは、枠のラベルを隠す", () => {
+describe("コメントモード", () => {
+  it("クリックは止めて位置を送るが、ホバー・クリックでは枠を出さない", () => {
+    const { post } = setup(PAGE);
+    mockRect(byId("2"), rect(10, 20, 100, 40));
+    message({ type: "review:mode", mode: "comment" });
+    expect(host().getAttribute("data-mode")).toBe("comment");
+
+    hover(byId("2"));
+    expect(box("hover").classList.contains("visible")).toBe(false);
+    const event = click(byId("2"));
+    expect(event.defaultPrevented).toBe(true);
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "review:select", elementId: "2" }),
+    );
+    expect(box("selected").classList.contains("visible")).toBe(false);
+  });
+
+  it("review:highlight で頼まれた要素（開いたコメントの対象）は囲む", () => {
     setup(PAGE);
-    message({ type: "review:mode", mode: "inspect", labels: false });
-    expect(host().getAttribute("data-labels")).toBe("off");
-    message({ type: "review:mode", mode: "inspect" });
-    expect(host().hasAttribute("data-labels")).toBe(false);
+    mockRect(byId("1"), rect(0, 40, 100, 50));
+    message({ type: "review:mode", mode: "comment" });
+    message({ type: "review:highlight", elementId: "1" });
+    expect(box("selected").classList.contains("visible")).toBe(true);
   });
 });

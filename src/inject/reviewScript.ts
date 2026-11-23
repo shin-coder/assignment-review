@@ -91,10 +91,10 @@ export function installReviewScript(win: Window, options: ReviewScriptOptions = 
     if (selected && !selected.element?.isConnected && selected.elementId !== null) {
       selected.element = findElementById(doc, selected.elementId);
     }
-    const inspecting = mode === "inspect";
-    overlay.draw("selected", inspecting ? (selected?.element ?? null) : null);
+    // 選択の枠は開発・コメントモードで出す（コメントモードでは親が頼んだ要素だけ）。ホバーは開発モードだけ
+    overlay.draw("selected", mode !== "browse" ? (selected?.element ?? null) : null);
     if (hovered && !hovered.element.isConnected) hovered = null;
-    overlay.draw("hover", inspecting ? (hovered?.element ?? null) : null, {
+    overlay.draw("hover", mode === "inspect" ? (hovered?.element ?? null) : null, {
       generated: hovered?.generated,
     });
     sendRects();
@@ -150,21 +150,21 @@ export function installReviewScript(win: Window, options: ReviewScriptOptions = 
   }
 
   function onClick(event: MouseEvent): void {
-    if (mode !== "inspect") return;
+    if (mode === "browse") return;
     const element = toElement(event.target);
     if (!element || overlay.contains(element)) return;
     // リンク遷移・フォーム送信・生徒の JS のクリック処理を止める
     event.preventDefault();
     event.stopImmediatePropagation();
     const target = findReviewTarget(element);
-    // 親のレイヤーツリーで選ばれるのは ID を持つ要素なので、枠もその要素に付ける
-    selected = { element: target.idElement ?? element, elementId: target.elementId };
-    overlay.draw("selected", selected.element);
-    const rect = (target.idElement ?? element).getBoundingClientRect();
-    const point =
-      Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
-        ? { x: event.clientX - rect.left, y: event.clientY - rect.top }
-        : undefined;
+    // 親で選ばれるのは ID を持つ要素なので、枠もその要素に付ける。
+    // コメントモードではクリックで枠を出さない（開いたコメントの対象だけを親が review:highlight で頼む）
+    const idElement = target.idElement ?? element;
+    if (mode === "inspect") {
+      selected = { element: idElement, elementId: target.elementId };
+      overlay.draw("selected", selected.element);
+    }
+    const point = pointIn(idElement, event);
     post({
       type: "review:select",
       elementId: target.elementId,
@@ -173,9 +173,21 @@ export function installReviewScript(win: Window, options: ReviewScriptOptions = 
     });
   }
 
+  /** クリックした位置を、要素に対する割合（左上 0、右下 1）で返す。大きさのない要素なら undefined */
+  function pointIn(element: Element, event: MouseEvent): { x: number; y: number } | undefined {
+    const rect = element.getBoundingClientRect();
+    if (!(rect.width > 0 && rect.height > 0)) return undefined;
+    if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return undefined;
+    const ratio = (value: number) => Math.min(1, Math.max(0, value));
+    return {
+      x: ratio((event.clientX - rect.left) / rect.width),
+      y: ratio((event.clientY - rect.top) / rect.height),
+    };
+  }
+
   /** 中クリック（新しいタブで開く）やダブルクリックも生徒のサイトへ届けない */
   function blockEvent(event: Event): void {
-    if (mode !== "inspect" || overlay.contains(event.target)) return;
+    if (mode === "browse" || overlay.contains(event.target)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   }
@@ -203,7 +215,7 @@ export function installReviewScript(win: Window, options: ReviewScriptOptions = 
         scheduleRedraw();
         return;
       case "review:mode":
-        overlay.setLabelsVisible(message.labels !== false);
+        overlay.setMode(message.mode);
         if (message.mode === mode) return;
         mode = message.mode;
         hovered = null;

@@ -647,12 +647,6 @@ body {
   inset: 0;
 }
 
-/* ピンをドラッグしている間は iframe にポインターを渡さない */
-.comment-layer[data-dragging="true"] {
-  pointer-events: auto;
-  cursor: grabbing;
-}
-
 .pin {
   position: absolute;
   display: grid;
@@ -666,8 +660,7 @@ body {
   color: #fff !important;
   box-shadow: var(--shadow-1);
   pointer-events: auto;
-  cursor: grab;
-  touch-action: none;
+  cursor: pointer;
   transition: transform 0.1s;
   transform-origin: 0 100%;
 }
@@ -683,13 +676,6 @@ body {
   box-shadow:
     0 0 0 3px var(--accent),
     var(--shadow-2);
-}
-
-.pin[data-dragging="true"] {
-  z-index: 4;
-  cursor: grabbing;
-  transform: scale(1.12);
-  transition: none;
 }
 
 .pin-draft {
@@ -1027,8 +1013,7 @@ body {
 }
 
 /* 幅を変えている間は、プレビューの iframe にポインターを奪われないようにする */
-.review:has(.side-panel[data-resizing="true"]) iframe,
-.review:has(.comment-layer[data-dragging="true"]) iframe {
+.review:has(.side-panel[data-resizing="true"]) iframe {
   pointer-events: none;
 }
 

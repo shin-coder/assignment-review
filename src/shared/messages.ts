@@ -1,14 +1,18 @@
-import type { PinOffset } from "./comment";
+import type { PinPoint } from "./comment";
 import type { ElementId } from "./element";
 
 // iframe ↔ 親アプリの postMessage。すべて type が "review:" で始まる
 
 /**
  * iframe 内の操作モード。
- * - "inspect": ホバーで枠を出し、クリックを止めて要素を選ぶ（コメント・開発モード）
+ * - "inspect": ホバーで枠を出し、クリックを止めて要素を選ぶ（開発モード）
+ * - "comment": クリックを止めて位置と要素を知らせるが、ホバー・クリックでは枠を出さない。
+ *   review:highlight で頼まれた要素（開いているコメントの対象）だけを薄く囲む
  * - "browse": 生徒のサイトをそのまま操作できる（リンク・JS のクリックも動く）。枠は出さない
  */
-export type FrameMode = "inspect" | "browse";
+export type FrameMode = "inspect" | "comment" | "browse";
+
+const FRAME_MODES: readonly unknown[] = ["inspect", "comment", "browse"];
 
 /** iframe のビューポート上の要素の矩形（getBoundingClientRect の値） */
 export interface TrackedRect {
@@ -28,8 +32,7 @@ export type ParentToFrameMessage =
   | { type: "review:highlight"; elementId: ElementId | null }
   | { type: "review:replace-element"; elementId: ElementId; html: string }
   | { type: "review:replace-css"; path: string; text: string }
-  /** labels が false なら、枠に要素名（h1 など）のラベルを出さない（コメントモード）。省略時は出す */
-  | { type: "review:mode"; mode: FrameMode; labels?: boolean }
+  | { type: "review:mode"; mode: FrameMode }
   /** 矩形を知らせてほしい要素（コメントのピン・コメント入力欄の位置合わせに使う） */
   | { type: "review:track"; elementIds: ElementId[] };
 
@@ -42,8 +45,8 @@ export type FrameToParentMessage =
       elementId: ElementId | null;
       /** JS が後から生成した要素（data-review-id がない要素）をクリックしたとき true */
       generated: boolean;
-      /** クリックした位置。選ばれた要素の左上からのずれ（CSS px）。分からなければ省略 */
-      point?: PinOffset;
+      /** クリックした位置。選ばれた要素に対する割合（左上が 0、右下が 1）。分からなければ省略 */
+      point?: PinPoint;
     }
   /** review:track で頼まれた要素の矩形。見つからない・大きさのない要素は含めない */
   | { type: "review:rects"; rects: TrackedRect[] }
@@ -74,7 +77,7 @@ function isTrackedRect(value: unknown): value is TrackedRect {
   );
 }
 
-function isPinOffset(value: unknown): value is PinOffset {
+function isPinPoint(value: unknown): value is PinPoint {
   return isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y);
 }
 
@@ -94,7 +97,7 @@ export function isFrameMessage(value: unknown): value is FrameToParentMessage {
       return (
         isElementIdOrNull(value.elementId) &&
         typeof value.generated === "boolean" &&
-        (value.point === undefined || isPinOffset(value.point))
+        (value.point === undefined || isPinPoint(value.point))
       );
     case "review:rects":
       return Array.isArray(value.rects) && value.rects.every(isTrackedRect);
@@ -116,10 +119,7 @@ export function isParentMessage(value: unknown): value is ParentToFrameMessage {
     case "review:replace-css":
       return typeof value.path === "string" && typeof value.text === "string";
     case "review:mode":
-      return (
-        (value.mode === "inspect" || value.mode === "browse") &&
-        (value.labels === undefined || typeof value.labels === "boolean")
-      );
+      return FRAME_MODES.includes(value.mode);
     case "review:track":
       return (
         Array.isArray(value.elementIds) &&

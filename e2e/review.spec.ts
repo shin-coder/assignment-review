@@ -216,11 +216,11 @@ test.describe("追加シナリオ", () => {
     await frame.locator(".next").click();
     await expect(frame.locator("#slide-2")).toHaveClass(/is-active/);
     await expect(page.getByTestId("comment-composer")).toBeVisible();
-    // コメントモードでは枠に要素名を出さない
-    await expect(frame.locator("review-tool-overlay")).toHaveAttribute("data-labels", "off");
+    // コメントモードではホバー・クリックで枠を出さない
+    await expect(frame.locator("review-tool-overlay")).toHaveAttribute("data-mode", "comment");
   });
 
-  test("コメントはクリックした場所にピンが立ち、ドラッグで動かせて、再読み込み後も残る", async ({
+  test("コメントのピンはクリックした場所に立ち、幅を変えても再読み込みしても同じ要素の上にある", async ({
     page,
   }) => {
     await openApp(page, "simple-image");
@@ -228,48 +228,63 @@ test.describe("追加シナリオ", () => {
     await page.getByTestId("device-mobile").click();
     await chooseTool(page, "comment");
 
-    await previewFrame(page)
-      .locator("#title")
-      .click({ position: { x: 40, y: 10 } });
+    const title = previewFrame(page).locator("#title");
+    await title.click({ position: { x: 40, y: 10 } });
     const textbox = page.getByRole("textbox", { name: "コメント", exact: true });
     await textbox.fill("ここを直す");
     await textbox.press("Enter");
 
     const pin = page.getByRole("button", { name: /コメント 1を開く/ });
+    // ピンの先（左下）が見出しの中にあるか
+    const pinTipInsideTitle = async () => {
+      const pinBox = (await pin.boundingBox())!;
+      const titleBox = (await title.boundingBox())!;
+      const tipX = pinBox.x;
+      const tipY = pinBox.y + pinBox.height;
+      return (
+        tipX >= titleBox.x - 1 &&
+        tipX <= titleBox.x + titleBox.width + 1 &&
+        tipY >= titleBox.y - 1 &&
+        tipY <= titleBox.y + titleBox.height + 1
+      );
+    };
     await expect(pin).toBeVisible();
-    const before = (await pin.boundingBox())!;
-    await page.mouse.move(before.x + 10, before.y + 10);
-    await page.mouse.down();
-    await page.mouse.move(before.x + 70, before.y + 50, { steps: 5 });
-    await page.mouse.up();
-    await expect.poll(async () => (await pin.boundingBox())!.x).toBeCloseTo(before.x + 60, -1);
+    await expect.poll(pinTipInsideTitle).toBe(true);
+    // 送信すると、そのコメントが開いた状態になる（ピンをもう一度押すと閉じる）
+    await expect(page.getByRole("dialog", { name: "コメント", exact: true })).toBeVisible();
+    await pin.click();
+    await expect(page.getByRole("dialog", { name: "コメント", exact: true })).toHaveCount(0);
+
+    // 幅を変えてレイアウトが変わっても、見出しの上に立つ
+    await page.getByTestId("device-tablet").click();
+    await expect.poll(pinTipInsideTitle).toBe(true);
     await waitSaved(page);
 
     await page.reload();
     await chooseTool(page, "comment");
-    const restored = page.getByRole("button", { name: /コメント 1を開く/ });
-    await expect(restored).toBeVisible();
-    await expect.poll(async () => (await restored.boundingBox())!.x).toBeCloseTo(before.x + 60, -1);
+    await expect(pin).toBeVisible();
+    await expect.poll(pinTipInsideTitle).toBe(true);
   });
 
-  test("JS が生成した要素をクリックすると対象外の案内が出て、コメントできない", async ({
+  test("JS が生成した要素は、開発モードでは対象外の案内が出て、コメントモードでは祖先に付けてコメントできる", async ({
     page,
   }) => {
     await openApp(page, "js-slider");
     await pickFolderAndWaitPreview(page);
-    await chooseTool(page, "comment");
-
     await expect(previewFrame(page).locator(".dot")).toHaveCount(3);
+
+    await chooseTool(page, "dev");
     await previewFrame(page).locator(".dot").first().click();
-
     await expect(page.getByTestId("generated-notice")).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "コメント", exact: true })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "コメントを追加" })).toBeDisabled();
 
-    // ソース上にある要素に切り替えると、コメントできる
-    await previewFrame(page).locator("#title").click();
+    await chooseTool(page, "comment");
+    await previewFrame(page).locator(".dot").first().click();
     await expect(page.getByTestId("generated-notice")).toHaveCount(0);
-    await expect(page.getByRole("textbox", { name: "コメント", exact: true })).toBeEnabled();
+    const textbox = page.getByRole("textbox", { name: "コメント", exact: true });
+    await expect(textbox).toBeEnabled();
+    await textbox.fill("ドットが小さい");
+    await textbox.press("Enter");
+    await expect(page.getByRole("list", { name: "コメント一覧" })).toContainText("ドットが小さい");
   });
 
   test("閉じタグ漏れの HTML でも、プレビュー・ツリー・クリック選択が動く", async ({ page }) => {

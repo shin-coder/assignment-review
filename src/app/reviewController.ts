@@ -11,13 +11,15 @@ import { classifyEdit, isNoopChange, replaceFile } from "../edit";
 import { findElementAt } from "../parser";
 import {
   PREVIEW_PREFIX,
+  clampPinPoint,
   normalizePath,
   type ElementId,
   type ElementInfo,
   type LayerNode,
   type ParentToFrameMessage,
   type FrameToParentMessage,
-  type PinOffset,
+  type FrameMode,
+  type PinPoint,
   type ReviewComment,
   type SourceLocation,
   type TextChange,
@@ -65,7 +67,7 @@ export interface ReviewState {
   /** 表示中の HTML のコメントのピン（対応する要素が見つかるものだけ） */
   pins: readonly CommentPin[];
   /** プレビューで要素をクリックした位置（要素の左上からのずれ）。新しいコメントのピンの位置になる */
-  selectedPoint: PinOffset | null;
+  selectedPoint: PinPoint | null;
   /** iframe が最初に開くパス。HTML がなければ null */
   entryPath: string | null;
   /** いま iframe に表示している HTML */
@@ -100,7 +102,7 @@ export interface ReviewState {
 
 type Core = {
   tool: Tool;
-  selectedPoint: PinOffset | null;
+  selectedPoint: PinPoint | null;
   selectionSeq: number;
   entryPath: string | null;
   currentPage: string | null;
@@ -212,13 +214,23 @@ export class ReviewController {
   }
 
   /** iframe での操作モード */
-  private frameMode(): "inspect" | "browse" {
-    return this.core.tool === "browse" ? "browse" : "inspect";
+  private frameMode(): FrameMode {
+    if (this.core.tool === "browse") return "browse";
+    return this.core.tool === "comment" ? "comment" : "inspect";
   }
 
-  /** iframe に送るモード。コメントモードでは枠に要素名を出さない */
   private modeMessage(): ParentToFrameMessage {
-    return { type: "review:mode", mode: this.frameMode(), labels: this.core.tool !== "comment" };
+    return { type: "review:mode", mode: this.frameMode() };
+  }
+
+  /**
+   * iframe の選択の枠を付け直す。コメントモードでは、コメントを開いているときだけ
+   * その対象の要素を囲む（クリックしてコメントを書いている間は枠を出さない）
+   */
+  private sendHighlight(): void {
+    const { tool, activeCommentId, selectedId } = this.core;
+    const elementId = tool === "comment" && activeCommentId === null ? null : selectedId;
+    this.send({ type: "review:highlight", elementId });
   }
 
   /** コメントモードの間だけ、ピンと選択中の要素の矩形を iframe に知らせてもらう */
@@ -323,7 +335,7 @@ export class ReviewController {
 
   private select(
     id: ElementId | null,
-    options: { generated?: boolean; fromEditor?: boolean; point?: PinOffset } = {},
+    options: { generated?: boolean; fromEditor?: boolean; point?: PinPoint } = {},
   ): void {
     const info = id === null ? null : (this.page()?.analysis.map.get(id) ?? null);
     const selectedId = info ? info.id : null;
@@ -339,7 +351,7 @@ export class ReviewController {
     };
     if (info && !options.fromEditor) Object.assign(patch, this.withOpened(info.filePath));
     this.commit(patch);
-    this.send({ type: "review:highlight", elementId: selectedId });
+    this.sendHighlight();
   }
 
   /** レイヤーツリーで選んだ */
@@ -359,6 +371,7 @@ export class ReviewController {
     if (tool === this.core.tool) return;
     this.commit({ tool, hoveredId: null });
     this.send(this.modeMessage());
+    this.sendHighlight();
   }
 
   setHovered(id: ElementId | null): void {
@@ -372,9 +385,7 @@ export class ReviewController {
       case "review:ready":
         // 作り直し直後の iframe にモード・選択の枠・追跡する要素を付け直す
         this.send(this.modeMessage());
-        if (this.core.selectedId !== null) {
-          this.send({ type: "review:highlight", elementId: this.core.selectedId });
-        }
+        this.sendHighlight();
         this.syncTrack(true);
         break;
       case "review:rects":
@@ -388,8 +399,12 @@ export class ReviewController {
         break;
       }
       case "review:select":
-        // JS 生成要素は祖先を選んで案内を出す（祖先がなければ選択なし）
-        this.select(message.elementId, { generated: message.generated, point: message.point });
+        // JS 生成要素は祖先を選んで案内を出す（祖先がなければ選択なし）。
+        // コメントモードでは案内を出さず、ソースにある一番近い祖先に黙って紐付ける
+        this.select(message.elementId, {
+          generated: message.generated && this.core.tool !== "comment",
+          point: message.point,
+        });
         break;
     }
   }
@@ -518,7 +533,7 @@ export class ReviewController {
 
     // 選択中の要素は、編集で動いた開始位置から探し直す
     const selected = this.selectedInfo();
-    let selectedId: ElementId | null = this.core.selectedId;
+    let selectedId: ElementId | null;
     if (path === this.core.currentPage && selected?.location) {
       const moved = shiftLocation(selected.location, change);
       selectedId = null;
@@ -557,7 +572,7 @@ export class ReviewController {
         }
       }
     }
-    this.send({ type: "review:highlight", elementId: selectedId });
+    this.sendHighlight();
   }
 
   /** すべての編集を元に戻す（コメントは残し、位置は元のソースに追従させる） */
@@ -608,11 +623,10 @@ export class ReviewController {
     }
     const point = this.core.selectedPoint;
     this.store.addComment(
-      point
-        ? { ...result.comment, pin: { x: Math.round(point.x), y: Math.round(point.y) } }
-        : result.comment,
+      point ? { ...result.comment, pin: clampPinPoint(point) } : result.comment,
     );
     this.commit({ activeCommentId: result.comment.id, message: null });
+    this.sendHighlight();
     return { ok: true, id: result.comment.id };
   }
 
@@ -622,18 +636,12 @@ export class ReviewController {
     this.commit({});
   }
 
-  /** ピンをドラッグして動かした。pin は要素の左上からのずれ（iframe 内の CSS px） */
-  moveComment(id: string, pin: PinOffset): void {
-    if (!this.store.getComment(id)) return;
-    this.store.updateComment(id, { pin: { x: Math.round(pin.x), y: Math.round(pin.y) } });
-    this.commit({});
-  }
-
   deleteComment(id: string): void {
     this.store.removeComment(id);
     this.commit({
       activeCommentId: this.core.activeCommentId === id ? null : this.core.activeCommentId,
     });
+    this.sendHighlight();
   }
 
   /** コメント一覧で選んだ。要素が見つかればツリー・iframe・エディタを連動させる */
@@ -651,6 +659,7 @@ export class ReviewController {
       if (filePath !== this.core.currentPage) this.openPage(filePath);
       this.select(elementId);
       this.commit({ activeCommentId: id });
+      this.sendHighlight();
       return;
     }
     // 見つからないコメントは、元の位置（付近）だけをエディタで示す
@@ -663,6 +672,6 @@ export class ReviewController {
       activeCommentId: id,
       ...this.withOpened(filePath),
     });
-    this.send({ type: "review:highlight", elementId: null });
+    this.sendHighlight();
   }
 }

@@ -195,7 +195,7 @@ describe("起動", () => {
     fireEvent.keyDown(window, { key: "c" });
     expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "comment");
     // コメントモードでは枠に要素名（h1 など）を出さない
-    expect(posted).toContainEqual({ type: "review:mode", mode: "inspect", labels: false });
+    expect(posted).toContainEqual({ type: "review:mode", mode: "comment" });
     fireEvent.keyDown(window, { key: "d" });
     expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "dev");
     fireEvent.keyDown(window, { key: "v" });
@@ -320,7 +320,7 @@ describe("選択の連動", () => {
     await waitFor(() => expect(editorProps?.value).toBe(expected.replace("2nd", "two")));
   });
 
-  it("コメントモードで要素を選ぶと入力欄が出る。JS 生成要素は案内を出して入力を無効にする", async () => {
+  it("コメントモードで要素を選ぶと入力欄が出る。JS 生成要素も祖先に紐付けてコメントできる", async () => {
     const { deps } = createDeps();
     await restoreProject(deps);
     chooseTool("comment");
@@ -332,11 +332,10 @@ describe("選択の連動", () => {
     // キャンセル・追加のボタンはなく、送信ボタン 1 つだけ
     expect(screen.queryByRole("button", { name: "キャンセル" })).toBeNull();
 
-    selectFromFrame(idIn(INDEX_HTML, "body"), true);
-    expect(await screen.findByTestId("generated-notice")).toHaveTextContent(
-      "JS が生成した要素は編集・コメントの対象外",
-    );
-    expect(screen.getByRole("textbox", { name: "コメント" })).toBeDisabled();
+    // JS 生成要素も、ソースにある祖先に紐付けてそのままコメントできる（案内は出さない）
+    selectFromFrame(idIn(INDEX_HTML, "p.b"), true);
+    expect(screen.queryByTestId("generated-notice")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "コメント" })).toBeEnabled();
   });
 
   it("Enter でコメントを送信し、Shift + Enter では送信しない", async () => {
@@ -371,38 +370,44 @@ describe("選択の連動", () => {
     await waitFor(() => expect(screen.queryByText("消すコメント")).toBeNull());
   });
 
-  it("ピンをドラッグすると、動かした位置を保存する", async () => {
+  it("ピンは要素に対する割合の位置に立ち、要素の大きさが変わっても同じ割合の場所に立つ", async () => {
     const { deps, repository } = createDeps();
     await restoreProject(deps);
-    // 等倍で表示される幅にして、画面上の移動量 = iframe 内の移動量にする
+    // 等倍で表示される幅にして、iframe 内の座標 = 画面上の座標にする
     fireEvent.click(screen.getByTestId("device-mobile"));
     chooseTool("comment");
     const id = idIn(INDEX_HTML, "p.a");
     const iframe = screen.getByTestId("fake-iframe") as HTMLIFrameElement;
     act(() =>
       frameProps!.onMessage!(
-        { type: "review:select", elementId: id, generated: false, point: { x: 10, y: 5 } },
+        { type: "review:select", elementId: id, generated: false, point: { x: 0.5, y: 0.25 } },
         iframe,
       ),
     );
     const textbox = await screen.findByRole("textbox", { name: "コメント" });
-    fireEvent.change(textbox, { target: { value: "動かす" } });
+    fireEvent.change(textbox, { target: { value: "真ん中" } });
     fireEvent.keyDown(textbox, { key: "Enter" });
-    act(() =>
-      frameProps!.onMessage!(
-        { type: "review:rects", rects: [{ elementId: id, x: 100, y: 200, width: 50, height: 20 }] },
-        iframe,
-      ),
-    );
-    const pin = await screen.findByRole("button", { name: /コメント 1を開く/ });
-    // jsdom にはポインターキャプチャがない
-    pin.setPointerCapture = () => undefined;
-    fireEvent.pointerDown(pin, { button: 0, pointerId: 1, clientX: 50, clientY: 50 });
-    fireEvent.pointerMove(pin, { pointerId: 1, clientX: 80, clientY: 70 });
-    fireEvent.pointerUp(pin, { pointerId: 1, clientX: 80, clientY: 70 });
     await waitFor(async () =>
-      expect((await repository.loadLatest())?.comments[0]?.pin).toEqual({ x: 40, y: 25 }),
+      expect((await repository.loadLatest())?.comments[0]?.pin).toEqual({ x: 0.5, y: 0.25 }),
     );
+    const sendRect = (width: number, height: number) =>
+      act(() =>
+        frameProps!.onMessage!(
+          { type: "review:rects", rects: [{ elementId: id, x: 100, y: 200, width, height }] },
+          iframe,
+        ),
+      );
+    const pin = () => screen.getByRole("button", { name: /コメント 1を開く/ });
+    sendRect(200, 40);
+    // ピンの先（左下）が要素の (50%, 25%) = (200, 210) に来る
+    await waitFor(() => expect(pin().style.left).toBe("200px"));
+    expect(pin().style.top).toBe(`${210 - 32}px`);
+    // 幅を変えて要素が小さくなっても、同じ割合の場所に立つ
+    sendRect(100, 80);
+    await waitFor(() => expect(pin().style.left).toBe("150px"));
+    expect(pin().style.top).toBe(`${220 - 32}px`);
+    // ドラッグしても動かない（ドラッグの仕組みを持たない）
+    expect(pin().getAttribute("draggable")).not.toBe("true");
   });
 
   it("Escape で選択を外し、入力欄を閉じる", async () => {

@@ -191,12 +191,10 @@ export function ReviewScreen({
                       selectedId={state.selectedId}
                       selectedPoint={state.selectedPoint}
                       disabledReason={state.commentDisabledReason}
-                      generated={state.generatedNotice !== null}
                       onSelectComment={(id) => controller.selectComment(id)}
                       onAddComment={(body) => controller.addComment(body)}
                       onUpdateComment={(id, body) => controller.updateComment(id, body)}
                       onDeleteComment={(id) => controller.deleteComment(id)}
-                      onMoveComment={(id, pin) => controller.moveComment(id, pin)}
                       onClose={() => controller.clearSelection()}
                     />
                   )

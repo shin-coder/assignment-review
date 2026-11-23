@@ -1,6 +1,6 @@
-import { useRef, useState, useSyncExternalStore, type PointerEvent } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { CommentPin } from "../../app/reviewController";
-import type { ElementId, PinOffset, ReviewComment } from "../../shared";
+import { clampPinPoint, type ElementId, type PinPoint, type ReviewComment } from "../../shared";
 import { CommentInput } from "./CommentInput";
 import type { FrameGeometry } from "./DeviceCanvas";
 import { CloseIcon } from "./icons";
@@ -9,13 +9,12 @@ import type { RectStore } from "./rectStore";
 import { relativeTime } from "./relativeTime";
 
 const PIN_SIZE = 32;
-/** 同じ要素で位置の決まっていないピンを横にずらす幅（CSS px） */
+/** 同じ要素で位置の決まっていないピンを横にずらす幅（画面上の px） */
 const PIN_GAP = PIN_SIZE + 4;
 const POPOVER_WIDTH = 340;
-/** これ以上動いたらクリックではなくドラッグとみなす（画面上の px） */
-const DRAG_THRESHOLD = 3;
 /** 要素の矩形がまだ届いていないときに入力欄を出す位置 */
 const FALLBACK_POINT = { x: 16, y: 16 };
+const TOP_LEFT: PinPoint = { x: 0, y: 0 };
 
 export const ORPHANED_MESSAGE = "対応する要素が編集で削除されました";
 
@@ -27,16 +26,14 @@ export interface CommentLayerProps {
   numbers: Record<string, number>;
   activeCommentId: string | null;
   selectedId: ElementId | null;
-  /** 要素をクリックした位置（要素の左上からのずれ） */
-  selectedPoint: PinOffset | null;
-  /** コメントできない理由。JS 生成要素なら generated を true にする */
+  /** 要素をクリックした位置（要素に対する割合） */
+  selectedPoint: PinPoint | null;
+  /** コメントできない理由（ソースに開始タグのない要素など）。コメントできるなら null */
   disabledReason: string | null;
-  generated: boolean;
   onSelectComment: (id: string) => void;
   onAddComment: (body: string) => void;
   onUpdateComment: (id: string, body: string) => void;
   onDeleteComment: (id: string) => void;
-  onMoveComment: (id: string, pin: PinOffset) => void;
   onClose: () => void;
 }
 
@@ -45,70 +42,53 @@ interface Point {
   y: number;
 }
 
-interface Drag {
-  commentId: string;
-  pointerId: number;
-  startX: number;
-  startY: number;
-  dx: number;
-  dy: number;
-  moved: boolean;
-}
-
 /**
  * プレビューの上に重ねるコメントの層（Figma のコメントのように、クリックした場所にピンを立てる）。
- * - ピンを押すとそのコメントを開き、ドラッグすると位置を動かせる
- * - 要素を選んでいてコメントを開いていなければ、その場所に入力欄を出す
+ * ピンは要素に紐付いていて、要素の中の割合で位置を持つ。プレビューの幅を変えても、
+ * スクロールしても、要素の中の同じあたりに立つ（ピンは動かせない）。
+ * - ピンを押すとそのコメントを開く
+ * - コメントを開いていなければ、クリックした場所に入力欄を出す
  */
 export function CommentLayer(props: CommentLayerProps) {
   const rectMap = useSyncExternalStore(props.rects.subscribe, props.rects.get);
   const { geometry } = props;
   const { scale } = geometry;
-  const [drag, setDrag] = useState<Drag | null>(null);
-  const dragRef = useRef<Drag | null>(null);
-  /** ドラッグの直後に来るクリックを無視する */
-  const suppressClickRef = useRef(false);
 
-  /** 要素の左上に offset を足した点（画面上の座標）。ビューポートの外なら null */
-  function pointOf(elementId: ElementId, offset: PinOffset): Point | null {
+  /** 要素の中の割合 point の位置（画面上の座標）。ビューポートの外なら null */
+  function pointOf(elementId: ElementId, point: PinPoint): Point | null {
     const rect = rectMap.get(elementId);
     if (!rect) return null;
-    const x = rect.x + offset.x;
-    const y = rect.y + offset.y;
+    const { x: rx, y: ry } = clampPinPoint(point);
+    const x = rect.x + rect.width * rx;
+    const y = rect.y + rect.height * ry;
     if (y < 0 || y > geometry.frameHeight || x < 0 || x > geometry.frameWidth) return null;
     return { x: x * scale, y: y * scale };
   }
 
-  const offsets = new Map<string, PinOffset>();
   const pinPoints = new Map<string, Point>();
   const unplaced = new Map<ElementId, number>();
   const commentById = new Map(props.comments.map((comment) => [comment.id, comment]));
   for (const pin of props.pins) {
-    let offset = commentById.get(pin.commentId)?.pin;
-    if (!offset) {
-      const index = unplaced.get(pin.elementId) ?? 0;
-      unplaced.set(pin.elementId, index + 1);
-      offset = { x: (index * PIN_GAP) / scale, y: 0 };
+    const saved = commentById.get(pin.commentId)?.pin;
+    const point = pointOf(pin.elementId, saved ?? TOP_LEFT);
+    if (!point) continue;
+    if (saved) {
+      pinPoints.set(pin.commentId, point);
+      continue;
     }
-    offsets.set(pin.commentId, offset);
-    const point = pointOf(pin.elementId, offset);
-    if (point) pinPoints.set(pin.commentId, point);
+    // 位置の分からない（古い）コメントは要素の左上に立て、重ならないよう横にずらす
+    const index = unplaced.get(pin.elementId) ?? 0;
+    unplaced.set(pin.elementId, index + 1);
+    pinPoints.set(pin.commentId, { x: point.x + index * PIN_GAP, y: point.y });
   }
 
   const active =
     props.activeCommentId === null ? null : (commentById.get(props.activeCommentId) ?? null);
   const activePoint = active ? (pinPoints.get(active.id) ?? null) : null;
-  const composing = activePoint === null && (props.selectedId !== null || props.generated);
+  const composing = activePoint === null && props.selectedId !== null;
   const composerPoint = composing
-    ? ((props.selectedId !== null
-        ? pointOf(props.selectedId, props.selectedPoint ?? { x: 0, y: 0 })
-        : null) ?? FALLBACK_POINT)
+    ? (pointOf(props.selectedId!, props.selectedPoint ?? TOP_LEFT) ?? FALLBACK_POINT)
     : null;
-
-  function moved(point: Point, commentId: string): Point {
-    if (!drag || drag.commentId !== commentId || !drag.moved) return point;
-    return { x: point.x + drag.dx, y: point.y + drag.dy };
-  }
 
   function popoverStyle(point: Point) {
     // ピンの右に出す。入りきらなければ左に出す（キャンバスの余白まではみ出してよい）
@@ -119,61 +99,11 @@ export function CommentLayer(props: CommentLayerProps) {
     return { left, top, width: POPOVER_WIDTH };
   }
 
-  function handlePointerDown(event: PointerEvent<HTMLButtonElement>, commentId: string) {
-    if (event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const next: Drag = {
-      commentId,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      dx: 0,
-      dy: 0,
-      moved: false,
-    };
-    dragRef.current = next;
-    setDrag(next);
-  }
-
-  function handlePointerMove(event: PointerEvent<HTMLButtonElement>) {
-    const current = dragRef.current;
-    if (!current || current.pointerId !== event.pointerId) return;
-    const dx = event.clientX - current.startX;
-    const dy = event.clientY - current.startY;
-    const next = {
-      ...current,
-      dx,
-      dy,
-      moved: current.moved || Math.hypot(dx, dy) > DRAG_THRESHOLD,
-    };
-    dragRef.current = next;
-    setDrag(next);
-  }
-
-  function handlePointerUp(event: PointerEvent<HTMLButtonElement>) {
-    const current = dragRef.current;
-    if (!current || current.pointerId !== event.pointerId) return;
-    dragRef.current = null;
-    setDrag(null);
-    if (!current.moved) return;
-    suppressClickRef.current = true;
-    const offset = offsets.get(current.commentId) ?? { x: 0, y: 0 };
-    props.onMoveComment(current.commentId, {
-      x: offset.x + current.dx / scale,
-      y: offset.y + current.dy / scale,
-    });
-  }
-
   return (
-    <div
-      className="comment-layer"
-      data-testid="comment-layer"
-      data-dragging={drag?.moved ? "true" : undefined}
-    >
+    <div className="comment-layer" data-testid="comment-layer">
       {props.pins.map((pin) => {
-        const base = pinPoints.get(pin.commentId);
-        if (!base) return null;
-        const point = moved(base, pin.commentId);
+        const point = pinPoints.get(pin.commentId);
+        if (!point) return null;
         const comment = commentById.get(pin.commentId);
         const number = props.numbers[pin.commentId];
         const isActive = pin.commentId === props.activeCommentId;
@@ -184,30 +114,13 @@ export function CommentLayer(props: CommentLayerProps) {
             className="pin"
             data-testid={`pin-${pin.commentId}`}
             data-active={isActive ? "true" : undefined}
-            data-dragging={drag?.commentId === pin.commentId && drag.moved ? "true" : undefined}
             aria-label={`コメント ${number ?? ""}を開く`}
             aria-pressed={isActive}
             style={{ left: point.x, top: point.y - PIN_SIZE }}
-            onPointerDown={(event) => handlePointerDown(event, pin.commentId)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={() => {
-              dragRef.current = null;
-              setDrag(null);
-            }}
-            onClick={(event) => {
-              // ドラッグの終わりのクリックは無視する（pointerup の後に来る）
-              if (suppressClickRef.current) {
-                suppressClickRef.current = false;
-                event.preventDefault();
-                return;
-              }
-              if (isActive) props.onClose();
-              else props.onSelectComment(pin.commentId);
-            }}
+            onClick={() => (isActive ? props.onClose() : props.onSelectComment(pin.commentId))}
           >
             <span className="pin-number">{number}</span>
-            {comment && !isActive && !drag && (
+            {comment && !isActive && (
               <span className="pin-preview" aria-hidden="true">
                 <span className="pin-preview-time">{relativeTime(comment.createdAt)}</span>
                 <span className="pin-preview-body">{comment.body}</span>
@@ -222,7 +135,7 @@ export function CommentLayer(props: CommentLayerProps) {
           key={active.id}
           comment={active}
           number={props.numbers[active.id]}
-          style={popoverStyle(moved(activePoint, active.id))}
+          style={popoverStyle(activePoint)}
           onClose={props.onClose}
           onUpdate={(body) => props.onUpdateComment(active.id, body)}
           onDelete={() => props.onDeleteComment(active.id)}
@@ -244,10 +157,9 @@ export function CommentLayer(props: CommentLayerProps) {
             style={popoverStyle(composerPoint)}
           >
             <CommentInput
-              // 要素を選び直したら入力中の下書きを捨てる
+              // 別の場所をクリックし直したら入力中の下書きを捨てる
               key={`${props.selectedId ?? "none"}:${props.selectedPoint?.x ?? ""}:${props.selectedPoint?.y ?? ""}`}
               disabledReason={props.disabledReason}
-              reasonTestId={props.generated ? "generated-notice" : undefined}
               autoFocus
               onSubmit={props.onAddComment}
               onCancel={props.onClose}
