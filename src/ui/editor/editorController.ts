@@ -51,8 +51,8 @@ const editorTheme = EditorView.theme(
       outline: "1px solid rgba(255, 255, 255, 0.25)",
     },
     [`.${HIGHLIGHT_CLASS}`]: {
-      backgroundColor: "rgba(250, 204, 21, 0.18)",
-      outline: "1px solid rgba(250, 204, 21, 0.55)",
+      backgroundColor: "rgba(59, 130, 246, 0.2)",
+      outline: "1px solid rgba(59, 130, 246, 0.6)",
     },
   },
   { dark: true },
