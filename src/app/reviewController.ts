@@ -215,22 +215,16 @@ export class ReviewController {
 
   /** iframe での操作モード */
   private frameMode(): FrameMode {
-    if (this.core.tool === "browse") return "browse";
-    return this.core.tool === "comment" ? "comment" : "inspect";
+    return this.core.tool === "browse" ? "browse" : "inspect";
   }
 
   private modeMessage(): ParentToFrameMessage {
     return { type: "review:mode", mode: this.frameMode() };
   }
 
-  /**
-   * iframe の選択の枠を付け直す。コメントモードでは、コメントを開いているときだけ
-   * その対象の要素を囲む（クリックしてコメントを書いている間は枠を出さない）
-   */
+  /** iframe の選択の枠を、選択中の要素に付け直す */
   private sendHighlight(): void {
-    const { tool, activeCommentId, selectedId } = this.core;
-    const elementId = tool === "comment" && activeCommentId === null ? null : selectedId;
-    this.send({ type: "review:highlight", elementId });
+    this.send({ type: "review:highlight", elementId: this.core.selectedId });
   }
 
   /** コメントモードの間だけ、ピンと選択中の要素の矩形を iframe に知らせてもらう */

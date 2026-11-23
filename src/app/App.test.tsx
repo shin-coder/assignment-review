@@ -194,8 +194,7 @@ describe("起動", () => {
     await restoreProject(deps);
     fireEvent.keyDown(window, { key: "c" });
     expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "comment");
-    // コメントモードでは枠に要素名（h1 など）を出さない
-    expect(posted).toContainEqual({ type: "review:mode", mode: "comment" });
+    expect(posted).toContainEqual({ type: "review:mode", mode: "inspect" });
     fireEvent.keyDown(window, { key: "d" });
     expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "dev");
     fireEvent.keyDown(window, { key: "v" });

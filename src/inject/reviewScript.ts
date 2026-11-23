@@ -91,10 +91,10 @@ export function installReviewScript(win: Window, options: ReviewScriptOptions = 
     if (selected && !selected.element?.isConnected && selected.elementId !== null) {
       selected.element = findElementById(doc, selected.elementId);
     }
-    // 選択の枠は開発・コメントモードで出す（コメントモードでは親が頼んだ要素だけ）。ホバーは開発モードだけ
-    overlay.draw("selected", mode !== "browse" ? (selected?.element ?? null) : null);
+    const inspecting = mode === "inspect";
+    overlay.draw("selected", inspecting ? (selected?.element ?? null) : null);
     if (hovered && !hovered.element.isConnected) hovered = null;
-    overlay.draw("hover", mode === "inspect" ? (hovered?.element ?? null) : null, {
+    overlay.draw("hover", inspecting ? (hovered?.element ?? null) : null, {
       generated: hovered?.generated,
     });
     sendRects();
@@ -150,20 +150,17 @@ export function installReviewScript(win: Window, options: ReviewScriptOptions = 
   }
 
   function onClick(event: MouseEvent): void {
-    if (mode === "browse") return;
+    if (mode !== "inspect") return;
     const element = toElement(event.target);
     if (!element || overlay.contains(element)) return;
     // リンク遷移・フォーム送信・生徒の JS のクリック処理を止める
     event.preventDefault();
     event.stopImmediatePropagation();
     const target = findReviewTarget(element);
-    // 親で選ばれるのは ID を持つ要素なので、枠もその要素に付ける。
-    // コメントモードではクリックで枠を出さない（開いたコメントの対象だけを親が review:highlight で頼む）
+    // 親で選ばれるのは ID を持つ要素なので、枠もその要素に付ける
     const idElement = target.idElement ?? element;
-    if (mode === "inspect") {
-      selected = { element: idElement, elementId: target.elementId };
-      overlay.draw("selected", selected.element);
-    }
+    selected = { element: idElement, elementId: target.elementId };
+    overlay.draw("selected", selected.element);
     const point = pointIn(idElement, event);
     post({
       type: "review:select",
@@ -187,7 +184,7 @@ export function installReviewScript(win: Window, options: ReviewScriptOptions = 
 
   /** 中クリック（新しいタブで開く）やダブルクリックも生徒のサイトへ届けない */
   function blockEvent(event: Event): void {
-    if (mode === "browse" || overlay.contains(event.target)) return;
+    if (mode !== "inspect" || overlay.contains(event.target)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   }
@@ -215,7 +212,6 @@ export function installReviewScript(win: Window, options: ReviewScriptOptions = 
         scheduleRedraw();
         return;
       case "review:mode":
-        overlay.setMode(message.mode);
         if (message.mode === mode) return;
         mode = message.mode;
         hovered = null;

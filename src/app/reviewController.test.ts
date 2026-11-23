@@ -320,7 +320,7 @@ describe("ツールの切り替え", () => {
     expect(controller.getState().tool).toBe("browse");
     controller.setTool("comment");
     expect(controller.getState().tool).toBe("comment");
-    expect(sent).toContainEqual({ type: "review:mode", mode: "comment" });
+    expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
     controller.setTool("dev");
     expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
     controller.setTool("browse");
@@ -455,31 +455,18 @@ describe("ピンの位置", () => {
 });
 
 describe("コメントモードの枠", () => {
-  it("要素をクリックして書いている間は枠を出さず、コメントを開いたら対象を囲む", () => {
+  it("コメントモードでも、クリックした要素に枠を付ける", () => {
     const { controller, sent } = setup();
     controller.setTool("comment");
+    expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
     const id = idOf(controller.getState(), "p.a");
     controller.handleFrameMessage({ type: "review:select", elementId: id, generated: false });
-    expect(sent.filter((m) => m.type === "review:highlight").at(-1)).toEqual({
-      type: "review:highlight",
-      elementId: null,
-    });
-
-    const { id: commentId } = controller.addComment("ここ") as { ok: true; id: string };
     expect(sent.at(-1)).toEqual({ type: "review:highlight", elementId: id });
 
+    const { id: commentId } = controller.addComment("ここ") as { ok: true; id: string };
     controller.clearSelection();
     expect(sent.at(-1)).toEqual({ type: "review:highlight", elementId: null });
     controller.selectComment(commentId);
-    expect(sent.at(-1)).toEqual({ type: "review:highlight", elementId: id });
-  });
-
-  it("開発モードに切り替えると、選んだ要素を囲む", () => {
-    const { controller, sent } = setup();
-    controller.setTool("comment");
-    const id = idOf(controller.getState(), "p.a");
-    controller.handleFrameMessage({ type: "review:select", elementId: id, generated: false });
-    controller.setTool("dev");
     expect(sent.at(-1)).toEqual({ type: "review:highlight", elementId: id });
   });
 

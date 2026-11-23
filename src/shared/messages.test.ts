@@ -49,7 +49,6 @@ describe("isParentMessage", () => {
     { type: "review:replace-css", path: "css/style.css", text: "p{}" },
     { type: "review:mode", mode: "inspect" },
     { type: "review:mode", mode: "browse" },
-    { type: "review:mode", mode: "comment" },
     { type: "review:track", elementIds: [] },
     { type: "review:track", elementIds: ["1", "2"] },
   ])("正しいメッセージを受け付ける: %o", (message) => {
@@ -66,6 +65,7 @@ describe("isParentMessage", () => {
     { type: "review:replace-css", path: "a.css" },
     { type: "review:replace-css", path: 1, text: "" },
     { type: "review:mode", mode: "edit" },
+    { type: "review:mode", mode: "comment" },
     { type: "review:mode" },
     { type: "review:track", elementIds: [1] },
     { type: "review:track" },

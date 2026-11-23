@@ -5,14 +5,12 @@ import type { ElementId } from "./element";
 
 /**
  * iframe 内の操作モード。
- * - "inspect": ホバーで枠を出し、クリックを止めて要素を選ぶ（開発モード）
- * - "comment": クリックを止めて位置と要素を知らせるが、ホバー・クリックでは枠を出さない。
- *   review:highlight で頼まれた要素（開いているコメントの対象）だけを薄く囲む
+ * - "inspect": ホバー・クリックで枠と要素名を出し、クリックを止めて要素を選ぶ（コメント・開発モード）
  * - "browse": 生徒のサイトをそのまま操作できる（リンク・JS のクリックも動く）。枠は出さない
  */
-export type FrameMode = "inspect" | "comment" | "browse";
+export type FrameMode = "inspect" | "browse";
 
-const FRAME_MODES: readonly unknown[] = ["inspect", "comment", "browse"];
+const FRAME_MODES: readonly unknown[] = ["inspect", "browse"];
 
 /** iframe のビューポート上の要素の矩形（getBoundingClientRect の値） */
 export interface TrackedRect {

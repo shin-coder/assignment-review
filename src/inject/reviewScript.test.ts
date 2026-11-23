@@ -680,29 +680,3 @@ describe("クリックした位置", () => {
     });
   });
 });
-
-describe("コメントモード", () => {
-  it("クリックは止めて位置を送るが、ホバー・クリックでは枠を出さない", () => {
-    const { post } = setup(PAGE);
-    mockRect(byId("2"), rect(10, 20, 100, 40));
-    message({ type: "review:mode", mode: "comment" });
-    expect(host().getAttribute("data-mode")).toBe("comment");
-
-    hover(byId("2"));
-    expect(box("hover").classList.contains("visible")).toBe(false);
-    const event = click(byId("2"));
-    expect(event.defaultPrevented).toBe(true);
-    expect(post).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "review:select", elementId: "2" }),
-    );
-    expect(box("selected").classList.contains("visible")).toBe(false);
-  });
-
-  it("review:highlight で頼まれた要素（開いたコメントの対象）は囲む", () => {
-    setup(PAGE);
-    mockRect(byId("1"), rect(0, 40, 100, 50));
-    message({ type: "review:mode", mode: "comment" });
-    message({ type: "review:highlight", elementId: "1" });
-    expect(box("selected").classList.contains("visible")).toBe(true);
-  });
-});

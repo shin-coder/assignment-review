@@ -216,8 +216,17 @@ test.describe("追加シナリオ", () => {
     await frame.locator(".next").click();
     await expect(frame.locator("#slide-2")).toHaveClass(/is-active/);
     await expect(page.getByTestId("comment-composer")).toBeVisible();
-    // コメントモードではホバー・クリックで枠を出さない
-    await expect(frame.locator("review-tool-overlay")).toHaveAttribute("data-mode", "comment");
+    // コメントモードでも、クリックした要素に枠と要素名を出す
+    await expect
+      .poll(() =>
+        frame
+          .locator("review-tool-overlay")
+          .evaluate(
+            (host) =>
+              host.shadowRoot?.querySelector(".box.selected.visible .label")?.textContent ?? "",
+          ),
+      )
+      .toContain("button.next");
   });
 
   test("コメントのピンはクリックした場所に立ち、幅を変えても再読み込みしても同じ要素の上にある", async ({
