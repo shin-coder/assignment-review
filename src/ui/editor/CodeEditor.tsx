@@ -26,6 +26,8 @@ export interface CodeEditorProps {
   modified?: boolean;
   /** 「元に戻す」ボタンが押された。元のソースに戻した value を渡し直すのは親の役目 */
   onReset?: () => void;
+  /** false ならファイル名・「適用」・「元に戻す」の行を出さない（呼び出し側が見出しを持つとき） */
+  showToolbar?: boolean;
 }
 
 const styles = {
@@ -41,15 +43,15 @@ const styles = {
     alignItems: "center",
     gap: "12px",
     padding: "6px 12px",
-    borderBottom: "1px solid #ddd",
+    borderBottom: "1px solid var(--line, #36363d)",
     flexWrap: "wrap",
   },
   path: { fontFamily: "ui-monospace, Menlo, Consolas, monospace", fontWeight: "bold" },
   spacer: { flex: 1 },
-  draft: { color: "#b35c00" },
+  draft: { color: "var(--warn-ink, #fbbf77)" },
   host: { flex: 1, minHeight: 0, overflow: "hidden" },
   binary: { padding: "16px", overflow: "auto" },
-  image: { maxWidth: "100%", height: "auto", background: "#f4f4f4" },
+  image: { maxWidth: "100%", height: "auto", background: "#ffffff" },
 } satisfies Record<string, CSSProperties>;
 
 /** HTML / CSS / JS をその場で編集するコードエディタ。バイナリファイルは編集できない旨を表示する */
@@ -83,6 +85,7 @@ function TextEditor({
   readOnly = false,
   modified = false,
   onReset,
+  showToolbar = true,
 }: TextEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<EditorController | null>(null);
@@ -147,7 +150,7 @@ function TextEditor({
 
   return (
     <>
-      <div style={styles.toolbar}>
+      <div style={showToolbar ? styles.toolbar : { display: "none" }}>
         <span style={styles.path} title={path}>
           {path}
         </span>

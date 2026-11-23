@@ -24,6 +24,7 @@ export interface Overlay {
   draw(kind: BoxKind, element: Element | null, options?: DrawOptions): void;
   /** 生徒の JS や要素の差し替えでホスト要素が外されていたら付け直す */
   ensureAttached(): void;
+
   dispose(): void;
 }
 
@@ -52,8 +53,10 @@ const SHADOW_STYLE = `
 }
 .box.visible { display: block; }
 .box.generated { border-style: dashed; }
-.hover { --color: #2563eb; --fill: rgb(37 99 235 / 0.12); }
-.selected { --color: #ea580c; --fill: rgb(234 88 12 / 0.1); }
+/* アプリのアクセント色（青）に揃える。ホバーは細い線、選択は太い線で見分ける */
+.hover { --color: rgb(59 130 246 / 0.75); --fill: rgb(59 130 246 / 0.06); border-width: 1px; }
+.selected { --color: #3b82f6; --fill: rgb(59 130 246 / 0.12); }
+.hover .label { background: #3b82f6; }
 .label {
   position: absolute;
   left: -2px;

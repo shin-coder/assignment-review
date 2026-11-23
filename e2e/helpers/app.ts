@@ -27,8 +27,18 @@ export function titleColor(page: Page): Promise<string> {
     .evaluate((element) => getComputedStyle(element).color);
 }
 
-/** エディタで指定のファイルを開く（タブがあればタブ、なければ「ファイルを開く」） */
+/** 画面下のツールバーでツールを選ぶ */
+export async function chooseTool(page: Page, tool: "browse" | "comment" | "dev"): Promise<void> {
+  await page.getByTestId(`tool-${tool}`).click();
+  await expect(page.getByTestId("review-screen")).toHaveAttribute("data-tool", tool);
+}
+
+/** 開発モードの「ファイル」でファイルを開く（タブがあればタブ、なければ「ファイルを開く」） */
 export async function openFile(page: Page, path: string): Promise<void> {
+  if ((await page.getByTestId("review-screen").getAttribute("data-tool")) !== "dev") {
+    await chooseTool(page, "dev");
+  }
+  await page.getByTestId("dev-view-file").click();
   const tab = page.locator(`[role="tab"][title="${path}"]`);
   if ((await tab.count()) > 0) {
     await tab.click();
@@ -41,6 +51,11 @@ export async function openFile(page: Page, path: string): Promise<void> {
 /** エディタの本文 */
 export function editorContent(page: Page): Locator {
   return page.getByTestId("code-editor").locator(".cm-content");
+}
+
+/** 開発モードの「この要素」に出ている要素のコード */
+export function elementCode(page: Page): Locator {
+  return page.getByTestId("element-code").locator(".cm-content");
 }
 
 /** 開いているファイルの内容を丸ごと入れ替える（自動閉じ括弧などを避けるため insertText を使う） */

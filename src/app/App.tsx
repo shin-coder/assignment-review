@@ -1,19 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { findEntryHtml, loadDirectory, LoaderError } from "../loader";
+import { findEntryHtml, loadDirectory, LoaderError, type DirectoryHandleLike } from "../loader";
 import { SourceStore, startAutoSave, type AutoSaver } from "../store";
 import type { AppDeps } from "./deps";
+import { EmptyScreen } from "./EmptyScreen";
 import { ReviewScreen } from "./ReviewScreen";
 import "./app.css";
 
 type Phase = { kind: "loading" } | { kind: "empty" } | { kind: "open"; store: SourceStore };
 
 type SaveStatus = "saving" | "saved" | "failed";
-
-const SAVE_LABELS: Record<SaveStatus, string> = {
-  saving: "保存中…",
-  saved: "保存済み",
-  failed: "保存失敗",
-};
 
 function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -93,11 +88,12 @@ export function App({ deps }: { deps: AppDeps }) {
     };
   }, [openStore, deps]);
 
-  async function handleOpenFolder() {
+  /** フォルダを選ぶ（ボタン）か、ドロップされたフォルダを開く */
+  async function handleOpenFolder(dropped?: DirectoryHandleLike) {
     setError(null);
     setBusy(true);
     try {
-      const handle = await deps.pickDirectory();
+      const handle = dropped ?? (await deps.pickDirectory());
       if (!handle) return;
       // 読み込み層は読み取りだけ。生徒のフォルダには書き込まない
       const loaded = await loadDirectory(handle);
@@ -140,57 +136,57 @@ export function App({ deps }: { deps: AppDeps }) {
   }
 
   const supported = deps.isPickerSupported();
+  const notices = [
+    error && { id: "app-error", text: error },
+    saveError && saveStatus === "failed" && { id: "save-error", text: saveError },
+  ].filter((notice): notice is { id: string; text: string } => Boolean(notice));
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>生徒サイト レビューツール</h1>
-        {openStore && <span className="project-name">{openStore.name}</span>}
-        <span className="spacer" />
-        {openStore && (
-          <span
-            data-testid="save-status"
-            data-status={saveStatus}
-            role="status"
-            title={saveError ?? undefined}
-          >
-            {SAVE_LABELS[saveStatus]}
-          </span>
-        )}
-        <button
-          type="button"
-          data-testid="open-folder"
-          disabled={!supported || busy}
-          onClick={() => void handleOpenFolder()}
-        >
-          フォルダを選ぶ
-        </button>
-      </header>
-
-      {!supported && (
-        <p role="alert" className="notice" data-testid="unsupported-browser">
-          このブラウザではフォルダを選べません。Chrome で開いてください。
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="notice" data-testid="app-error">
-          {error}
-        </p>
-      )}
-      {saveError && saveStatus === "failed" && (
-        <p role="alert" className="notice" data-testid="save-error">
-          {saveError}
-        </p>
+      {notices.length > 0 && (
+        <div className="toasts">
+          {notices.map((notice) => (
+            <p key={notice.id} role="alert" className="toast" data-testid={notice.id}>
+              {notice.text}
+              {notice.id === "app-error" && (
+                <button
+                  type="button"
+                  className="toast-close"
+                  aria-label="閉じる"
+                  onClick={() => setError(null)}
+                >
+                  ×
+                </button>
+              )}
+            </p>
+          ))}
+        </div>
       )}
 
-      {phase.kind === "loading" && <p role="status">読み込み中…</p>}
-      {phase.kind === "empty" && <p className="empty">生徒のサイトのフォルダを選んでください。</p>}
+      {phase.kind === "loading" && (
+        <p role="status" className="loading">
+          読み込み中…
+        </p>
+      )}
+      {phase.kind === "empty" && (
+        <EmptyScreen
+          supported={supported}
+          busy={busy}
+          onPick={() => void handleOpenFolder()}
+          onDrop={(handle) => void handleOpenFolder(handle)}
+        />
+      )}
       {phase.kind === "open" && (
         <ReviewScreen
           key={phase.store.projectId}
           store={phase.store}
           deps={deps}
           workerReady={workerReady}
+          saveStatus={saveStatus}
+          saveError={saveError}
+          busy={busy}
+          canOpenFolder={supported}
+          onOpenFolder={() => void handleOpenFolder()}
           onDeleteProject={() => void handleDeleteProject()}
         />
       )}

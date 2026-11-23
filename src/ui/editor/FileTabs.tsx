@@ -21,21 +21,32 @@ const styles = {
     display: "flex",
     gap: "2px",
     overflowX: "auto",
-    borderBottom: "1px solid #ddd",
+    borderBottom: "1px solid var(--line, #36363d)",
     fontSize: "16px",
   },
   item: { display: "flex", alignItems: "center", flexShrink: 0 },
+  // 選択中のタブで上書きする値（下線の色・太さ）と、まとめ書き（border / font）を混ぜない
   tab: {
     padding: "8px 12px",
-    border: "none",
-    borderBottom: "3px solid transparent",
+    borderWidth: "0 0 3px",
+    borderStyle: "solid",
+    borderBottomColor: "transparent",
     background: "transparent",
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    fontWeight: "normal",
+    color: "inherit",
+    cursor: "pointer",
+  },
+  activeTab: { borderBottomColor: "var(--accent, #3b82f6)", fontWeight: "bold" },
+  mark: { marginLeft: "6px", color: "var(--warn-ink, #fbbf77)" },
+  close: {
+    border: "none",
+    background: "transparent",
+    color: "inherit",
     font: "inherit",
     cursor: "pointer",
   },
-  activeTab: { borderBottomColor: "#1a73e8", fontWeight: "bold" },
-  mark: { marginLeft: "6px", color: "#e37400" },
-  close: { border: "none", background: "transparent", font: "inherit", cursor: "pointer" },
 } satisfies Record<string, CSSProperties>;
 
 function baseName(path: string): string {
