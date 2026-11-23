@@ -9,4 +9,15 @@ export interface ReviewComment {
   createdAt: number;
   /** 対応する箇所が編集で消えたら "orphaned" */
   status: "active" | "orphaned";
+  /**
+   * ピンを立てる位置。要素の左上からのずれ（iframe 内の CSS px）。
+   * クリックした位置や、ピンをドラッグして動かした位置。古いデータにはないので省略できる
+   */
+  pin?: PinOffset;
+}
+
+/** 要素の左上からのずれ（iframe 内の CSS px） */
+export interface PinOffset {
+  x: number;
+  y: number;
 }

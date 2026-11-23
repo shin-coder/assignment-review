@@ -137,7 +137,9 @@ test.describe("必須シナリオ", () => {
       .getByRole("button", { name: /見出しの色を確認/ })
       .click();
     await expect(pin).toHaveAttribute("data-active", "true");
-    await expect(page.getByRole("dialog", { name: "コメント" })).toContainText("見出しの色を確認");
+    await expect(page.getByRole("dialog", { name: "コメント", exact: true })).toContainText(
+      "見出しの色を確認",
+    );
 
     // エディタにも編集後のソースが入っている
     await openFile(page, "css/style.css");
@@ -213,7 +215,41 @@ test.describe("追加シナリオ", () => {
     await chooseTool(page, "comment");
     await frame.locator(".next").click();
     await expect(frame.locator("#slide-2")).toHaveClass(/is-active/);
-    await expect(page.getByTestId("comment-composer")).toContainText("button.next");
+    await expect(page.getByTestId("comment-composer")).toBeVisible();
+    // コメントモードでは枠に要素名を出さない
+    await expect(frame.locator("review-tool-overlay")).toHaveAttribute("data-labels", "off");
+  });
+
+  test("コメントはクリックした場所にピンが立ち、ドラッグで動かせて、再読み込み後も残る", async ({
+    page,
+  }) => {
+    await openApp(page, "simple-image");
+    await pickFolderAndWaitPreview(page);
+    await page.getByTestId("device-mobile").click();
+    await chooseTool(page, "comment");
+
+    await previewFrame(page)
+      .locator("#title")
+      .click({ position: { x: 40, y: 10 } });
+    const textbox = page.getByRole("textbox", { name: "コメント", exact: true });
+    await textbox.fill("ここを直す");
+    await textbox.press("Enter");
+
+    const pin = page.getByRole("button", { name: /コメント 1を開く/ });
+    await expect(pin).toBeVisible();
+    const before = (await pin.boundingBox())!;
+    await page.mouse.move(before.x + 10, before.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(before.x + 70, before.y + 50, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(async () => (await pin.boundingBox())!.x).toBeCloseTo(before.x + 60, -1);
+    await waitSaved(page);
+
+    await page.reload();
+    await chooseTool(page, "comment");
+    const restored = page.getByRole("button", { name: /コメント 1を開く/ });
+    await expect(restored).toBeVisible();
+    await expect.poll(async () => (await restored.boundingBox())!.x).toBeCloseTo(before.x + 60, -1);
   });
 
   test("JS が生成した要素をクリックすると対象外の案内が出て、コメントできない", async ({

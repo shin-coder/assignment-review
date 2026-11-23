@@ -10,6 +10,7 @@ import { DeviceCanvas } from "../ui/review/DeviceCanvas";
 import { DEVICES, type DeviceId } from "../ui/review/devices";
 import { ProjectMenu, type SaveStatus } from "../ui/review/ProjectMenu";
 import { createRectStore } from "../ui/review/rectStore";
+import { ResizablePanel } from "../ui/review/ResizablePanel";
 import { Toolbar } from "../ui/review/Toolbar";
 import type { AppDeps } from "./deps";
 import { ReviewController, type Tool } from "./reviewController";
@@ -176,6 +177,7 @@ export function ReviewScreen({
         ) : (
           <DeviceCanvas
             device={device}
+            onDeviceChange={changeDevice}
             overlay={
               tool === "comment"
                 ? (geometry) => (
@@ -185,16 +187,16 @@ export function ReviewScreen({
                       pins={state.pins}
                       comments={state.comments}
                       numbers={numbers}
-                      labels={state.commentLabels}
                       activeCommentId={state.activeCommentId}
                       selectedId={state.selectedId}
-                      selectedLabel={state.selectedLabel}
+                      selectedPoint={state.selectedPoint}
                       disabledReason={state.commentDisabledReason}
                       generated={state.generatedNotice !== null}
                       onSelectComment={(id) => controller.selectComment(id)}
                       onAddComment={(body) => controller.addComment(body)}
                       onUpdateComment={(id, body) => controller.updateComment(id, body)}
                       onDeleteComment={(id) => controller.deleteComment(id)}
+                      onMoveComment={(id, pin) => controller.moveComment(id, pin)}
                       onClose={() => controller.clearSelection()}
                     />
                   )
@@ -231,33 +233,30 @@ export function ReviewScreen({
           </p>
         )}
 
-        <Toolbar
-          tool={tool}
-          onToolChange={(next) => controller.setTool(next)}
-          device={device}
-          onDeviceChange={changeDevice}
-        />
+        <Toolbar tool={tool} onToolChange={(next) => controller.setTool(next)} />
       </div>
 
       {tool === "comment" && (
-        <CommentPanel
-          comments={sorted}
-          labels={state.commentLabels}
-          numbers={numbers}
-          activeId={state.activeCommentId}
-          onSelect={(id) => controller.selectComment(id)}
-          onDelete={(id) => controller.deleteComment(id)}
-          onUpdate={(id, body) => controller.updateComment(id, body)}
-        />
+        <ResizablePanel storageKey="comment" label="コメント" defaultWidth={340}>
+          <CommentPanel
+            comments={sorted}
+            numbers={numbers}
+            activeId={state.activeCommentId}
+            onSelect={(id) => controller.selectComment(id)}
+            onDelete={(id) => controller.deleteComment(id)}
+          />
+        </ResizablePanel>
       )}
       {tool === "dev" && (
-        <DevPanel
-          store={store}
-          controller={controller}
-          state={state}
-          view={devView}
-          onViewChange={setDevView}
-        />
+        <ResizablePanel storageKey="dev" label="開発" defaultWidth={520} minWidth={340}>
+          <DevPanel
+            store={store}
+            controller={controller}
+            state={state}
+            view={devView}
+            onViewChange={setDevView}
+          />
+        </ResizablePanel>
       )}
     </div>
   );

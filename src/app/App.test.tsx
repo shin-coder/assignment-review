@@ -1,6 +1,6 @@
 // 結合テスト: 各層の実物（解析・編集・コメント・保存・UI）をつなぎ、
 // iframe と Service Worker が絡む部分（PreviewFrame・コードエディタ）だけを差し替える
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useLayoutEffect, type Ref } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeDirectory, type WriteCall } from "../loader/fakeHandles";
@@ -194,7 +194,8 @@ describe("起動", () => {
     await restoreProject(deps);
     fireEvent.keyDown(window, { key: "c" });
     expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "comment");
-    expect(posted).toContainEqual({ type: "review:mode", mode: "inspect" });
+    // コメントモードでは枠に要素名（h1 など）を出さない
+    expect(posted).toContainEqual({ type: "review:mode", mode: "inspect", labels: false });
     fireEvent.keyDown(window, { key: "d" });
     expect(screen.getByTestId("review-screen")).toHaveAttribute("data-tool", "dev");
     fireEvent.keyDown(window, { key: "v" });
@@ -324,14 +325,84 @@ describe("選択の連動", () => {
     await restoreProject(deps);
     chooseTool("comment");
     selectFromFrame(idIn(INDEX_HTML, "p.a"));
-    expect(await screen.findByTestId("comment-composer")).toHaveTextContent("p.a");
+    const composer = await screen.findByTestId("comment-composer");
+    // 要素名（タグ名）は出さない
+    expect(composer).not.toHaveTextContent("p.a");
     expect(screen.getByRole("textbox", { name: "コメント" })).toBeEnabled();
+    // キャンセル・追加のボタンはなく、送信ボタン 1 つだけ
+    expect(screen.queryByRole("button", { name: "キャンセル" })).toBeNull();
 
     selectFromFrame(idIn(INDEX_HTML, "body"), true);
     expect(await screen.findByTestId("generated-notice")).toHaveTextContent(
       "JS が生成した要素は編集・コメントの対象外",
     );
     expect(screen.getByRole("textbox", { name: "コメント" })).toBeDisabled();
+  });
+
+  it("Enter でコメントを送信し、Shift + Enter では送信しない", async () => {
+    const { deps, repository } = createDeps();
+    await restoreProject(deps);
+    chooseTool("comment");
+    selectFromFrame(idIn(INDEX_HTML, "p.a"));
+    const textbox = await screen.findByRole("textbox", { name: "コメント" });
+    fireEvent.change(textbox, { target: { value: "一行目" } });
+    fireEvent.keyDown(textbox, { key: "Enter", shiftKey: true });
+    expect(screen.queryByRole("list", { name: "コメント一覧" })).toBeNull();
+    fireEvent.keyDown(textbox, { key: "Enter" });
+    const list = await screen.findByRole("list", { name: "コメント一覧" });
+    expect(list).toHaveTextContent("一行目");
+    await waitFor(async () =>
+      expect((await repository.loadLatest())?.comments[0]?.body).toBe("一行目"),
+    );
+  });
+
+  it("一覧の「…」から削除できる（一覧では編集できない）", async () => {
+    const { deps } = createDeps();
+    await restoreProject(deps);
+    chooseTool("comment");
+    selectFromFrame(idIn(INDEX_HTML, "p.a"));
+    const textbox = await screen.findByRole("textbox", { name: "コメント" });
+    fireEvent.change(textbox, { target: { value: "消すコメント" } });
+    fireEvent.keyDown(textbox, { key: "Enter" });
+    const list = await screen.findByRole("list", { name: "コメント一覧" });
+    fireEvent.click(within(list).getByRole("button", { name: "コメントの操作" }));
+    expect(within(list).queryByRole("menuitem", { name: "編集" })).toBeNull();
+    fireEvent.click(within(list).getByRole("menuitem", { name: "削除" }));
+    await waitFor(() => expect(screen.queryByText("消すコメント")).toBeNull());
+  });
+
+  it("ピンをドラッグすると、動かした位置を保存する", async () => {
+    const { deps, repository } = createDeps();
+    await restoreProject(deps);
+    // 等倍で表示される幅にして、画面上の移動量 = iframe 内の移動量にする
+    fireEvent.click(screen.getByTestId("device-mobile"));
+    chooseTool("comment");
+    const id = idIn(INDEX_HTML, "p.a");
+    const iframe = screen.getByTestId("fake-iframe") as HTMLIFrameElement;
+    act(() =>
+      frameProps!.onMessage!(
+        { type: "review:select", elementId: id, generated: false, point: { x: 10, y: 5 } },
+        iframe,
+      ),
+    );
+    const textbox = await screen.findByRole("textbox", { name: "コメント" });
+    fireEvent.change(textbox, { target: { value: "動かす" } });
+    fireEvent.keyDown(textbox, { key: "Enter" });
+    act(() =>
+      frameProps!.onMessage!(
+        { type: "review:rects", rects: [{ elementId: id, x: 100, y: 200, width: 50, height: 20 }] },
+        iframe,
+      ),
+    );
+    const pin = await screen.findByRole("button", { name: /コメント 1を開く/ });
+    // jsdom にはポインターキャプチャがない
+    pin.setPointerCapture = () => undefined;
+    fireEvent.pointerDown(pin, { button: 0, pointerId: 1, clientX: 50, clientY: 50 });
+    fireEvent.pointerMove(pin, { pointerId: 1, clientX: 80, clientY: 70 });
+    fireEvent.pointerUp(pin, { pointerId: 1, clientX: 80, clientY: 70 });
+    await waitFor(async () =>
+      expect((await repository.loadLatest())?.comments[0]?.pin).toEqual({ x: 40, y: 25 }),
+    );
   });
 
   it("Escape で選択を外し、入力欄を閉じる", async () => {
@@ -436,7 +507,7 @@ describe("編集の反映", () => {
   });
 
   it("要素の前に要素を足す編集をしても、コメントが同じ要素を指す", async () => {
-    const { deps } = createDeps();
+    const { deps, posted } = createDeps();
     await restoreProject(deps);
     chooseTool("comment");
     selectFromFrame(idIn(INDEX_HTML, "p.b"));
@@ -455,8 +526,16 @@ describe("編集の反映", () => {
       ),
     );
     chooseTool("comment");
+    // 編集後のソースで p.b を探し直し、その要素のピンの矩形を iframe に頼んでいる
+    const movedId = idIn(
+      INDEX_HTML.replace('<p class="b">', '<p class="new">n</p><p class="b">'),
+      "p.b",
+    );
+    await waitFor(() =>
+      expect(posted).toContainEqual({ type: "review:track", elementIds: [movedId] }),
+    );
     const list = await screen.findByRole("list", { name: "コメント一覧" });
-    await waitFor(() => expect(list).toHaveTextContent("p.b"));
+    expect(list.querySelector('[data-status="active"]')).not.toBeNull();
   });
 
   it("編集は自動保存され、保存状態が表示される", async () => {

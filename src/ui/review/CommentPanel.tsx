@@ -1,22 +1,25 @@
 import type { ReviewComment } from "../../shared";
-import { CommentList } from "../comments";
+import { ORPHANED_MESSAGE } from "./CommentLayer";
 import { CommentIcon } from "./icons";
+import { MoreMenu } from "./MoreMenu";
 import { relativeTime } from "./relativeTime";
 
 export interface CommentPanelProps {
+  /** 並べる順（ピンの番号順）に並べたコメント */
   comments: readonly ReviewComment[];
-  labels: Record<string, string>;
   numbers: Record<string, number>;
   activeId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, body: string) => void;
 }
 
-/** コメントモードの右側のパネル。すべてのコメント（要素が消えたものも）を並べる */
+/**
+ * コメントモードの右側のパネル。すべてのコメント（要素が消えたものも）を並べる。
+ * 編集はコメントを開いたところでだけ行い、ここではホバーで出る「…」から削除だけできる
+ */
 export function CommentPanel(props: CommentPanelProps) {
   return (
-    <aside className="side-panel" aria-label="コメント">
+    <>
       <header className="side-panel-header">
         <h2 className="side-panel-title">コメント</h2>
         <span className="count-badge">{props.comments.length}</span>
@@ -26,24 +29,50 @@ export function CommentPanel(props: CommentPanelProps) {
           <div className="panel-empty">
             <CommentIcon size={28} />
             <p>
-              プレビューの要素をクリックすると、
+              プレビューをクリックすると、
               <br />
-              そこにコメントを付けられます
+              その場所にコメントを付けられます
             </p>
           </div>
         ) : (
-          <CommentList
-            comments={[...props.comments]}
-            labels={props.labels}
-            numbers={props.numbers}
-            activeId={props.activeId}
-            formatTime={relativeTime}
-            onSelect={props.onSelect}
-            onDelete={props.onDelete}
-            onUpdate={props.onUpdate}
-          />
+          <ul className="clist" aria-label="コメント一覧">
+            {props.comments.map((comment) => {
+              const active = comment.id === props.activeId;
+              const orphaned = comment.status === "orphaned";
+              return (
+                <li
+                  key={comment.id}
+                  className="clist-item"
+                  data-testid={`comment-${comment.id}`}
+                  data-status={comment.status}
+                  data-active={active ? "true" : undefined}
+                  aria-current={active ? "true" : undefined}
+                >
+                  <button
+                    type="button"
+                    className="clist-main"
+                    onClick={() => props.onSelect(comment.id)}
+                  >
+                    <span className="clist-head">
+                      <span className="clist-number">{props.numbers[comment.id]}</span>
+                      <span className="clist-time">{relativeTime(comment.createdAt)}</span>
+                    </span>
+                    {orphaned && <span className="clist-orphaned">{ORPHANED_MESSAGE}</span>}
+                    <span className="clist-body">{comment.body}</span>
+                  </button>
+                  <MoreMenu
+                    className="clist-more"
+                    label="コメントの操作"
+                    items={[
+                      { label: "削除", danger: true, onSelect: () => props.onDelete(comment.id) },
+                    ]}
+                  />
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
-    </aside>
+    </>
   );
 }

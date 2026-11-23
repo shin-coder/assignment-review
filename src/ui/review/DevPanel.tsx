@@ -28,7 +28,7 @@ export function DevPanel({ store, controller, state, view, onViewChange }: DevPa
   }
 
   return (
-    <aside className="side-panel side-panel-wide" aria-label="開発">
+    <>
       <header className="side-panel-header">
         <h2 className="side-panel-title">開発</h2>
         <div className="segmented" role="radiogroup" aria-label="表示">
@@ -74,7 +74,7 @@ export function DevPanel({ store, controller, state, view, onViewChange }: DevPa
       ) : (
         <FileView store={store} controller={controller} state={state} textPaths={textPaths} />
       )}
-    </aside>
+    </>
   );
 }
 

@@ -160,7 +160,17 @@ export function installReviewScript(win: Window, options: ReviewScriptOptions = 
     // 親のレイヤーツリーで選ばれるのは ID を持つ要素なので、枠もその要素に付ける
     selected = { element: target.idElement ?? element, elementId: target.elementId };
     overlay.draw("selected", selected.element);
-    post({ type: "review:select", elementId: target.elementId, generated: target.generated });
+    const rect = (target.idElement ?? element).getBoundingClientRect();
+    const point =
+      Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+        ? { x: event.clientX - rect.left, y: event.clientY - rect.top }
+        : undefined;
+    post({
+      type: "review:select",
+      elementId: target.elementId,
+      generated: target.generated,
+      ...(point ? { point } : {}),
+    });
   }
 
   /** 中クリック（新しいタブで開く）やダブルクリックも生徒のサイトへ届けない */
@@ -193,6 +203,7 @@ export function installReviewScript(win: Window, options: ReviewScriptOptions = 
         scheduleRedraw();
         return;
       case "review:mode":
+        overlay.setLabelsVisible(message.labels !== false);
         if (message.mode === mode) return;
         mode = message.mode;
         hovered = null;

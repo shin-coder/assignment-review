@@ -99,3 +99,21 @@ export const FileIcon = (p: IconProps) => (
     <path d="M14 3v4.5h4.5" />
   </Icon>
 );
+
+export const MoreIcon = (p: IconProps) => (
+  <Icon {...p} strokeWidth={2.6}>
+    <path d="M5.5 12h.01M12 12h.01M18.5 12h.01" />
+  </Icon>
+);
+
+export const ArrowUpIcon = (p: IconProps) => (
+  <Icon {...p} strokeWidth={2.2}>
+    <path d="M12 19V5M6 11l6-6 6 6" />
+  </Icon>
+);
+
+export const CheckIcon = (p: IconProps) => (
+  <Icon {...p} strokeWidth={2.2}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </Icon>
+);

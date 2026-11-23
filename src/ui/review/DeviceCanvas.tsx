@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { DeviceSwitcher } from "./DeviceSwitcher";
 import { deviceOf, type DeviceId } from "./devices";
 import { computeGeometry, FALLBACK, PAD_TOP, type FrameGeometry } from "./geometry";
 
@@ -6,6 +7,7 @@ export type { FrameGeometry };
 
 export interface DeviceCanvasProps {
   device: DeviceId;
+  onDeviceChange: (device: DeviceId) => void;
   /** iframe（プレビュー）。デバイスの幅で描き、縮小は親がまとめて行う */
   children: ReactNode;
   /** 枠の上に重ねる層（コメントのピンなど）。画面上の座標で描く */
@@ -16,7 +18,7 @@ export interface DeviceCanvasProps {
  * 灰色のキャンバスの中央に、選んだデバイスの幅でプレビューを置く。
  * 入りきらない幅（PC の 1440px など）は、iframe のビューポートの幅を変えずに縮小して見せる
  */
-export function DeviceCanvas({ device, children, overlay }: DeviceCanvasProps) {
+export function DeviceCanvas({ device, onDeviceChange, children, overlay }: DeviceCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(FALLBACK);
 
@@ -40,16 +42,22 @@ export function DeviceCanvas({ device, children, overlay }: DeviceCanvasProps) {
 
   return (
     <div className="canvas" ref={canvasRef} data-testid="canvas">
+      <DeviceSwitcher
+        device={device}
+        onChange={onDeviceChange}
+        zoomPercent={percent < 100 ? percent : null}
+      />
       <div
         className="device"
         data-device={device}
-        style={{ width: geometry.width, height: geometry.height, top: PAD_TOP }}
+        // transform で中央に寄せると、iframe 内の要素の位置の計算（自動テストなど）がずれるため、left を px で決める
+        style={{
+          width: geometry.width,
+          height: geometry.height,
+          top: PAD_TOP,
+          left: geometry.roomLeft,
+        }}
       >
-        <div className="device-label" aria-live="polite">
-          <span className="device-label-name">{info.label}</span>
-          <span>{info.width}px</span>
-          {percent < 100 && <span className="device-label-zoom">{percent}% で表示</span>}
-        </div>
         <div
           className="device-viewport"
           style={{

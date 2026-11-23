@@ -24,6 +24,8 @@ export interface Overlay {
   draw(kind: BoxKind, element: Element | null, options?: DrawOptions): void;
   /** 生徒の JS や要素の差し替えでホスト要素が外されていたら付け直す */
   ensureAttached(): void;
+  /** 枠のラベル（要素名）を出すか */
+  setLabelsVisible(visible: boolean): void;
   dispose(): void;
 }
 
@@ -65,6 +67,7 @@ const SHADOW_STYLE = `
   font: 12px/1.5 system-ui, sans-serif;
   white-space: nowrap;
 }
+:host([data-labels="off"]) .label { display: none; }
 .box.label-inside .label { bottom: auto; top: 0; border-radius: 0 0 3px 0; }
 `;
 
@@ -134,6 +137,10 @@ export function createOverlay(doc: Document): Overlay {
       (node instanceof Node && (host.contains(node) || node.getRootNode() === shadow)),
     draw,
     ensureAttached,
+    setLabelsVisible: (visible) => {
+      if (visible) host.removeAttribute("data-labels");
+      else host.setAttribute("data-labels", "off");
+    },
     dispose: () => host.remove(),
   };
 }

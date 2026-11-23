@@ -166,6 +166,7 @@ describe("クリック", () => {
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
       type: "review:select",
+      point: expect.anything(),
       elementId: "3",
       generated: false,
     });
@@ -179,6 +180,7 @@ describe("クリック", () => {
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
       type: "review:select",
+      point: expect.anything(),
       elementId: "3",
       generated: true,
     });
@@ -195,8 +197,8 @@ describe("クリック", () => {
     click(document.documentElement);
 
     expect(post.mock.calls.map(([m]) => m)).toEqual([
-      { type: "review:select", elementId: null, generated: false },
-      { type: "review:select", elementId: null, generated: false },
+      { type: "review:select", elementId: null, generated: false, point: expect.anything() },
+      { type: "review:select", elementId: null, generated: false, point: expect.anything() },
     ]);
   });
 
@@ -211,6 +213,7 @@ describe("クリック", () => {
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
       type: "review:select",
+      point: expect.anything(),
       elementId: "7",
       generated: false,
     });
@@ -223,6 +226,7 @@ describe("クリック", () => {
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
       type: "review:select",
+      point: expect.anything(),
       elementId: null,
       generated: true,
     });
@@ -660,5 +664,29 @@ describe("キーの転送", () => {
     press(document.body, { key: "c", metaKey: true });
     press(document.body, { key: "x" });
     expect(post).not.toHaveBeenCalled();
+  });
+});
+
+describe("クリックした位置", () => {
+  it("選んだ要素の左上からのずれを point で送る", () => {
+    const { post } = setup(PAGE);
+    mockRect(byId("2"), rect(10, 20, 100, 40));
+    byId("2").dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true, clientX: 35, clientY: 30 }),
+    );
+    expect(post).toHaveBeenCalledWith({
+      type: "review:select",
+      elementId: "2",
+      generated: false,
+      point: { x: 25, y: 10 },
+    });
+  });
+
+  it("labels: false のモードでは、枠のラベルを隠す", () => {
+    setup(PAGE);
+    message({ type: "review:mode", mode: "inspect", labels: false });
+    expect(host().getAttribute("data-labels")).toBe("off");
+    message({ type: "review:mode", mode: "inspect" });
+    expect(host().hasAttribute("data-labels")).toBe(false);
   });
 });

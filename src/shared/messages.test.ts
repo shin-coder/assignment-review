@@ -12,6 +12,7 @@ describe("isFrameMessage", () => {
     { type: "review:rects", rects: [{ elementId: "1", x: 0, y: -10, width: 20, height: 5 }] },
     { type: "review:key", key: "c" },
     { type: "review:key", key: "Escape" },
+    { type: "review:select", elementId: "3", generated: false, point: { x: 4, y: 5 } },
   ])("正しいメッセージを受け付ける: %o", (message) => {
     expect(isFrameMessage(message)).toBe(true);
   });
@@ -34,6 +35,7 @@ describe("isFrameMessage", () => {
     { type: "review:rects", rects: [{ elementId: "1", x: NaN, y: 0, width: 1, height: 1 }] },
     { type: "review:key", key: "x" },
     { type: "review:key", key: "C" },
+    { type: "review:select", elementId: "3", generated: false, point: { x: 4 } },
   ])("不正なメッセージを拒否する: %o", (message) => {
     expect(isFrameMessage(message)).toBe(false);
   });
@@ -47,6 +49,7 @@ describe("isParentMessage", () => {
     { type: "review:replace-css", path: "css/style.css", text: "p{}" },
     { type: "review:mode", mode: "inspect" },
     { type: "review:mode", mode: "browse" },
+    { type: "review:mode", mode: "inspect", labels: false },
     { type: "review:track", elementIds: [] },
     { type: "review:track", elementIds: ["1", "2"] },
   ])("正しいメッセージを受け付ける: %o", (message) => {
@@ -64,6 +67,7 @@ describe("isParentMessage", () => {
     { type: "review:replace-css", path: 1, text: "" },
     { type: "review:mode", mode: "edit" },
     { type: "review:mode" },
+    { type: "review:mode", mode: "inspect", labels: "no" },
     { type: "review:track", elementIds: [1] },
     { type: "review:track" },
   ])("不正なメッセージを拒否する: %o", (message) => {

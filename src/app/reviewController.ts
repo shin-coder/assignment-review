@@ -17,6 +17,7 @@ import {
   type LayerNode,
   type ParentToFrameMessage,
   type FrameToParentMessage,
+  type PinOffset,
   type ReviewComment,
   type SourceLocation,
   type TextChange,
@@ -63,6 +64,8 @@ export interface ReviewState {
   selectedLocation: SourceLocation | null;
   /** 表示中の HTML のコメントのピン（対応する要素が見つかるものだけ） */
   pins: readonly CommentPin[];
+  /** プレビューで要素をクリックした位置（要素の左上からのずれ）。新しいコメントのピンの位置になる */
+  selectedPoint: PinOffset | null;
   /** iframe が最初に開くパス。HTML がなければ null */
   entryPath: string | null;
   /** いま iframe に表示している HTML */
@@ -97,6 +100,7 @@ export interface ReviewState {
 
 type Core = {
   tool: Tool;
+  selectedPoint: PinOffset | null;
   selectionSeq: number;
   entryPath: string | null;
   currentPage: string | null;
@@ -146,6 +150,7 @@ export class ReviewController {
       (this.pages.has("index.html") ? "index.html" : (htmlPaths[0] ?? null));
     this.core = {
       tool: "browse",
+      selectedPoint: null,
       selectionSeq: 0,
       entryPath: first,
       currentPage: first,
@@ -211,6 +216,11 @@ export class ReviewController {
     return this.core.tool === "browse" ? "browse" : "inspect";
   }
 
+  /** iframe に送るモード。コメントモードでは枠に要素名を出さない */
+  private modeMessage(): ParentToFrameMessage {
+    return { type: "review:mode", mode: this.frameMode(), labels: this.core.tool !== "comment" };
+  }
+
   /** コメントモードの間だけ、ピンと選択中の要素の矩形を iframe に知らせてもらう */
   private trackIds(): ElementId[] {
     if (this.core.tool !== "comment") return [];
@@ -262,6 +272,7 @@ export class ReviewController {
       selectionSeq: core.selectionSeq,
       selectedLocation: core.generated ? null : (info?.location ?? null),
       pins,
+      selectedPoint: core.selectedPoint,
       entryPath: core.entryPath,
       currentPage: core.currentPage,
       rebuildKey: core.rebuildKey,
@@ -312,13 +323,14 @@ export class ReviewController {
 
   private select(
     id: ElementId | null,
-    options: { generated?: boolean; fromEditor?: boolean } = {},
+    options: { generated?: boolean; fromEditor?: boolean; point?: PinOffset } = {},
   ): void {
     const info = id === null ? null : (this.page()?.analysis.map.get(id) ?? null);
     const selectedId = info ? info.id : null;
     const patch: Partial<Core> = {
       selectionSeq: this.core.selectionSeq + 1,
       selectedId,
+      selectedPoint: selectedId === null ? null : (options.point ?? null),
       generated: options.generated ?? false,
       highlightHidden: options.fromEditor ?? false,
       highlightOverride: null,
@@ -346,7 +358,7 @@ export class ReviewController {
   setTool(tool: Tool): void {
     if (tool === this.core.tool) return;
     this.commit({ tool, hoveredId: null });
-    this.send({ type: "review:mode", mode: this.frameMode() });
+    this.send(this.modeMessage());
   }
 
   setHovered(id: ElementId | null): void {
@@ -359,7 +371,7 @@ export class ReviewController {
     switch (message.type) {
       case "review:ready":
         // 作り直し直後の iframe にモード・選択の枠・追跡する要素を付け直す
-        this.send({ type: "review:mode", mode: this.frameMode() });
+        this.send(this.modeMessage());
         if (this.core.selectedId !== null) {
           this.send({ type: "review:highlight", elementId: this.core.selectedId });
         }
@@ -377,7 +389,7 @@ export class ReviewController {
       }
       case "review:select":
         // JS 生成要素は祖先を選んで案内を出す（祖先がなければ選択なし）
-        this.select(message.elementId, { generated: message.generated });
+        this.select(message.elementId, { generated: message.generated, point: message.point });
         break;
     }
   }
@@ -594,7 +606,12 @@ export class ReviewController {
       this.commit({ message: result.message });
       return { ok: false, message: result.message };
     }
-    this.store.addComment(result.comment);
+    const point = this.core.selectedPoint;
+    this.store.addComment(
+      point
+        ? { ...result.comment, pin: { x: Math.round(point.x), y: Math.round(point.y) } }
+        : result.comment,
+    );
     this.commit({ activeCommentId: result.comment.id, message: null });
     return { ok: true, id: result.comment.id };
   }
@@ -602,6 +619,13 @@ export class ReviewController {
   updateComment(id: string, body: string): void {
     if (!this.store.getComment(id)) return;
     this.store.updateComment(id, { body });
+    this.commit({});
+  }
+
+  /** ピンをドラッグして動かした。pin は要素の左上からのずれ（iframe 内の CSS px） */
+  moveComment(id: string, pin: PinOffset): void {
+    if (!this.store.getComment(id)) return;
+    this.store.updateComment(id, { pin: { x: Math.round(pin.x), y: Math.round(pin.y) } });
     this.commit({});
   }
 

@@ -320,9 +320,9 @@ describe("ツールの切り替え", () => {
     expect(controller.getState().tool).toBe("browse");
     controller.setTool("comment");
     expect(controller.getState().tool).toBe("comment");
-    expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
+    expect(sent).toContainEqual({ type: "review:mode", mode: "inspect", labels: false });
     controller.setTool("browse");
-    expect(sent.at(-1)).toEqual({ type: "review:mode", mode: "browse" });
+    expect(sent.at(-1)).toEqual({ type: "review:mode", mode: "browse", labels: true });
   });
 
   it("切り替えても選択は残る", () => {
@@ -339,7 +339,7 @@ describe("ツールの切り替え", () => {
     controller.setTool("dev");
     sent.length = 0;
     controller.handleFrameMessage({ type: "review:ready" });
-    expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
+    expect(sent).toContainEqual({ type: "review:mode", mode: "inspect", labels: true });
   });
 });
 
@@ -413,5 +413,37 @@ describe("選択中の要素のソース範囲と selectionSeq", () => {
     const bodyId = idOf(controller.getState(), "body");
     controller.handleFrameMessage({ type: "review:select", elementId: bodyId, generated: true });
     expect(controller.getState().selectedLocation).toBeNull();
+  });
+});
+
+describe("ピンの位置", () => {
+  it("クリックした位置を新しいコメントのピンの位置にする", () => {
+    const { controller, store } = setup();
+    const id = idOf(controller.getState(), "p.a");
+    controller.handleFrameMessage({
+      type: "review:select",
+      elementId: id,
+      generated: false,
+      point: { x: 12.4, y: 7.6 },
+    });
+    expect(controller.getState().selectedPoint).toEqual({ x: 12.4, y: 7.6 });
+    const result = controller.addComment("ここ");
+    expect(result.ok).toBe(true);
+    expect(store.getComments()[0]?.pin).toEqual({ x: 12, y: 8 });
+  });
+
+  it("位置の分からない選択（ツリー・エディタ）では pin を付けない", () => {
+    const { controller, store } = setup();
+    controller.selectFromTree(idOf(controller.getState(), "p.a"));
+    controller.addComment("ここ");
+    expect(store.getComments()[0]?.pin).toBeUndefined();
+  });
+
+  it("moveComment でピンの位置を保存する", () => {
+    const { controller, store } = setup();
+    controller.selectFromTree(idOf(controller.getState(), "p.a"));
+    const { id } = controller.addComment("ここ") as { ok: true; id: string };
+    controller.moveComment(id, { x: 40.2, y: -10.7 });
+    expect(store.getComment(id)?.pin).toEqual({ x: 40, y: -11 });
   });
 });

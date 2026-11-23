@@ -1,3 +1,4 @@
+import type { PinOffset } from "./comment";
 import type { ElementId } from "./element";
 
 // iframe ↔ 親アプリの postMessage。すべて type が "review:" で始まる
@@ -27,7 +28,8 @@ export type ParentToFrameMessage =
   | { type: "review:highlight"; elementId: ElementId | null }
   | { type: "review:replace-element"; elementId: ElementId; html: string }
   | { type: "review:replace-css"; path: string; text: string }
-  | { type: "review:mode"; mode: FrameMode }
+  /** labels が false なら、枠に要素名（h1 など）のラベルを出さない（コメントモード）。省略時は出す */
+  | { type: "review:mode"; mode: FrameMode; labels?: boolean }
   /** 矩形を知らせてほしい要素（コメントのピン・コメント入力欄の位置合わせに使う） */
   | { type: "review:track"; elementIds: ElementId[] };
 
@@ -40,6 +42,8 @@ export type FrameToParentMessage =
       elementId: ElementId | null;
       /** JS が後から生成した要素（data-review-id がない要素）をクリックしたとき true */
       generated: boolean;
+      /** クリックした位置。選ばれた要素の左上からのずれ（CSS px）。分からなければ省略 */
+      point?: PinOffset;
     }
   /** review:track で頼まれた要素の矩形。見つからない・大きさのない要素は含めない */
   | { type: "review:rects"; rects: TrackedRect[] }
@@ -70,6 +74,10 @@ function isTrackedRect(value: unknown): value is TrackedRect {
   );
 }
 
+function isPinOffset(value: unknown): value is PinOffset {
+  return isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y);
+}
+
 export function isForwardedKey(value: unknown): value is ForwardedKey {
   return (FORWARDED_KEYS as readonly unknown[]).includes(value);
 }
@@ -83,7 +91,11 @@ export function isFrameMessage(value: unknown): value is FrameToParentMessage {
     case "review:hover":
       return isElementIdOrNull(value.elementId);
     case "review:select":
-      return isElementIdOrNull(value.elementId) && typeof value.generated === "boolean";
+      return (
+        isElementIdOrNull(value.elementId) &&
+        typeof value.generated === "boolean" &&
+        (value.point === undefined || isPinOffset(value.point))
+      );
     case "review:rects":
       return Array.isArray(value.rects) && value.rects.every(isTrackedRect);
     case "review:key":
@@ -104,7 +116,10 @@ export function isParentMessage(value: unknown): value is ParentToFrameMessage {
     case "review:replace-css":
       return typeof value.path === "string" && typeof value.text === "string";
     case "review:mode":
-      return value.mode === "inspect" || value.mode === "browse";
+      return (
+        (value.mode === "inspect" || value.mode === "browse") &&
+        (value.labels === undefined || typeof value.labels === "boolean")
+      );
     case "review:track":
       return (
         Array.isArray(value.elementIds) &&
