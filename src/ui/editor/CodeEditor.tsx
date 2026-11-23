@@ -43,15 +43,15 @@ const styles = {
     alignItems: "center",
     gap: "12px",
     padding: "6px 12px",
-    borderBottom: "1px solid #ddd",
+    borderBottom: "1px solid var(--line, #36363d)",
     flexWrap: "wrap",
   },
   path: { fontFamily: "ui-monospace, Menlo, Consolas, monospace", fontWeight: "bold" },
   spacer: { flex: 1 },
-  draft: { color: "#b35c00" },
+  draft: { color: "var(--warn-ink, #fbbf77)" },
   host: { flex: 1, minHeight: 0, overflow: "hidden" },
   binary: { padding: "16px", overflow: "auto" },
-  image: { maxWidth: "100%", height: "auto", background: "#f4f4f4" },
+  image: { maxWidth: "100%", height: "auto", background: "#ffffff" },
 } satisfies Record<string, CSSProperties>;
 
 /** HTML / CSS / JS をその場で編集するコードエディタ。バイナリファイルは編集できない旨を表示する */

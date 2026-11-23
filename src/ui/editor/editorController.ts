@@ -2,6 +2,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import {
   bracketMatching,
   defaultHighlightStyle,
+  HighlightStyle,
   indentOnInput,
   syntaxHighlighting,
 } from "@codemirror/language";
@@ -24,19 +25,68 @@ import { diffText } from "./textDiff";
 /** 親（value）から来た変更に付ける印。更新の監視でこの印の付いた変更を無視し、onChange の無限ループを防ぐ */
 const externalChange = Annotation.define<boolean>();
 
-/** 画面共有で読みやすいよう、文字と行間を大きめにする */
-const editorTheme = EditorView.theme({
-  "&": { fontSize: "18px", height: "100%" },
-  ".cm-scroller": {
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono", monospace',
-    lineHeight: "1.6",
+/** 画面共有で読みやすいよう、文字と行間を大きめにする。アプリに合わせて暗い配色にする */
+const editorTheme = EditorView.theme(
+  {
+    "&": { fontSize: "18px", height: "100%", color: "#e4e4e9", backgroundColor: "#1f1f24" },
+    ".cm-scroller": {
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono", monospace',
+      lineHeight: "1.6",
+    },
+    ".cm-content": { caretColor: "#ffffff" },
+    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#ffffff" },
+    ".cm-gutters": {
+      fontSize: "16px",
+      color: "#6e6e78",
+      backgroundColor: "#1f1f24",
+      borderRight: "1px solid #33333a",
+    },
+    ".cm-activeLine": { backgroundColor: "rgba(255, 255, 255, 0.04)" },
+    ".cm-activeLineGutter": { backgroundColor: "rgba(255, 255, 255, 0.06)", color: "#c4c4cc" },
+    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
+      backgroundColor: "rgba(59, 130, 246, 0.35)",
+    },
+    "&.cm-focused .cm-matchingBracket": {
+      backgroundColor: "rgba(255, 255, 255, 0.12)",
+      outline: "1px solid rgba(255, 255, 255, 0.25)",
+    },
+    [`.${HIGHLIGHT_CLASS}`]: {
+      backgroundColor: "rgba(250, 204, 21, 0.18)",
+      outline: "1px solid rgba(250, 204, 21, 0.55)",
+    },
   },
-  ".cm-gutters": { fontSize: "16px" },
-  [`.${HIGHLIGHT_CLASS}`]: {
-    backgroundColor: "rgba(255, 196, 0, 0.35)",
-    outline: "1px solid rgba(230, 140, 0, 0.8)",
-  },
-});
+  { dark: true },
+);
+
+/**
+ * CodeMirror の既定の色（白地用）を、暗い背景で読める色に置き換える。
+ * タグの定義（@lezer/highlight）を直接の依存に足さずに済むよう、既定のスタイルの色だけ差し替える
+ */
+const DARK_COLORS: Record<string, string> = {
+  "#404740": "#8b8b96", // メタ情報
+  "#708": "#c792ea", // キーワード
+  "#219": "#f78c6c", // 数値など
+  "#164": "#89ddff", // 真偽値・アトム
+  "#a11": "#c3e88d", // 文字列
+  "#e40": "#ffcb6b", // 正規表現・エスケープ
+  "#00f": "#82aaff", // 変数の定義
+  "#30a": "#f07178", // ローカル変数
+  "#085": "#f07178", // 型名・タグ名
+  "#167": "#ffcb6b", // クラス名
+  "#256": "#89ddff", // 特殊な変数
+  "#00c": "#82aaff", // プロパティの定義・属性名
+  "#940": "#7f848e", // コメント
+  "#f00": "#ff5370", // 不正な記述
+};
+
+const darkHighlightStyle = HighlightStyle.define(
+  defaultHighlightStyle.specs.map((spec) =>
+    typeof spec.color === "string" && DARK_COLORS[spec.color]
+      ? { ...spec, color: DARK_COLORS[spec.color] }
+      : spec,
+  ),
+  { themeType: "dark" },
+);
 
 function readOnlyExtension(readOnly: boolean): Extension {
   return [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
@@ -152,7 +202,7 @@ export class EditorController {
         history(),
         indentOnInput(),
         bracketMatching(),
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        syntaxHighlighting(darkHighlightStyle),
         Prec.highest(
           keymap.of([
             // JS の「適用」。JS 以外では既定の動作（空行の挿入）のままにする

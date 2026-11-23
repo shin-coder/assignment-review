@@ -21,7 +21,7 @@ const styles = {
     display: "flex",
     gap: "2px",
     overflowX: "auto",
-    borderBottom: "1px solid #ddd",
+    borderBottom: "1px solid var(--line, #36363d)",
     fontSize: "16px",
   },
   item: { display: "flex", alignItems: "center", flexShrink: 0 },
@@ -35,11 +35,18 @@ const styles = {
     fontFamily: "inherit",
     fontSize: "inherit",
     fontWeight: "normal",
+    color: "inherit",
     cursor: "pointer",
   },
-  activeTab: { borderBottomColor: "#1a73e8", fontWeight: "bold" },
-  mark: { marginLeft: "6px", color: "#e37400" },
-  close: { border: "none", background: "transparent", font: "inherit", cursor: "pointer" },
+  activeTab: { borderBottomColor: "var(--accent, #3b82f6)", fontWeight: "bold" },
+  mark: { marginLeft: "6px", color: "var(--warn-ink, #fbbf77)" },
+  close: {
+    border: "none",
+    background: "transparent",
+    color: "inherit",
+    font: "inherit",
+    cursor: "pointer",
+  },
 } satisfies Record<string, CSSProperties>;
 
 function baseName(path: string): string {

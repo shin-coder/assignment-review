@@ -410,6 +410,34 @@ describe("選択の連動", () => {
     expect(pin().getAttribute("draggable")).not.toBe("true");
   });
 
+  it("枠の上端にある要素のピンは下向きにして、枠の外（プロジェクト名など）に重ねない", async () => {
+    const { deps } = createDeps();
+    await restoreProject(deps);
+    fireEvent.click(screen.getByTestId("device-mobile"));
+    chooseTool("comment");
+    const id = idIn(INDEX_HTML, "h1");
+    const iframe = screen.getByTestId("fake-iframe") as HTMLIFrameElement;
+    act(() =>
+      frameProps!.onMessage!(
+        { type: "review:select", elementId: id, generated: false, point: { x: 0, y: 0 } },
+        iframe,
+      ),
+    );
+    const textbox = await screen.findByRole("textbox", { name: "コメント" });
+    fireEvent.change(textbox, { target: { value: "上端" } });
+    fireEvent.keyDown(textbox, { key: "Enter" });
+    act(() =>
+      frameProps!.onMessage!(
+        { type: "review:rects", rects: [{ elementId: id, x: 0, y: 0, width: 300, height: 40 }] },
+        iframe,
+      ),
+    );
+    const pin = await screen.findByRole("button", { name: /コメント 1を開く/ });
+    expect(pin).toHaveAttribute("data-flip", "down-right");
+    // ピンの本体が枠の内側（top >= 0）にある
+    expect(pin.style.top).toBe("0px");
+  });
+
   it("Escape で選択を外し、入力欄を閉じる", async () => {
     const { deps } = createDeps();
     await restoreProject(deps);

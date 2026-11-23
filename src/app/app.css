@@ -1,30 +1,35 @@
 /* 画面共有で見せる前提なので、文字は大きめ・コントラストは高め。色はここのトークンにまとめる */
 :root {
-  --canvas: #e8e8ec;
-  --surface: #ffffff;
-  --surface-2: #f6f6f8;
-  --ink: #18181b;
-  --ink-2: #52525b;
-  --ink-3: #8b8b94;
-  --line: #e2e2e7;
-  --line-strong: #cfcfd6;
-  --accent: #2563eb;
+  /* Figma のダークモードに近い配色。生徒のサイト（プレビューの中）は白地のまま */
+  --canvas: #1b1b1f;
+  --surface: #26262b;
+  --surface-2: #313137;
+  --ink: #ececf1;
+  --ink-2: #b6b6bf;
+  --ink-3: #85858f;
+  --line: #36363d;
+  --line-strong: #4a4a53;
+  --elevated-border: rgb(255 255 255 / 0.08);
+  --accent: #3b82f6;
+  --accent-hover: #2f74e6;
   --accent-ink: #ffffff;
-  --accent-soft: #e8efff;
-  --danger: #dc2626;
-  --danger-soft: #fdecec;
-  --warn-ink: #8a4b00;
-  --warn-soft: #fff4e2;
-  --ok: #16a34a;
-  --dock: #1f1f23;
-  --dock-2: #2c2c31;
+  --accent-soft: rgb(59 130 246 / 0.18);
+  --danger: #ef4444;
+  --danger-soft: rgb(239 68 68 / 0.16);
+  --danger-ink: #fca5a5;
+  --warn-ink: #fbbf77;
+  --warn-soft: rgb(251 191 119 / 0.12);
+  --ok: #22c55e;
+  --dock: #2b2b31;
+  --dock-2: #3b3b42;
   --dock-ink: #e7e7ea;
   --dock-ink-2: #9a9aa3;
+  --dots: rgb(255 255 255 / 0.055);
   --radius: 10px;
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.06), 0 2px 8px rgb(0 0 0 / 0.06);
-  --shadow-2: 0 8px 28px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.08);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
+  --shadow-2: 0 10px 32px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.35);
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 html,
@@ -97,7 +102,7 @@ body {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #1d4fd7;
+  background: var(--accent-hover);
 }
 
 .btn-danger {
@@ -197,11 +202,12 @@ body {
   place-items: center;
   padding: 32px 16px;
   background:
-    radial-gradient(circle at 1px 1px, rgb(0 0 0 / 0.07) 1px, transparent 0) 0 0 / 22px 22px,
+    radial-gradient(circle at 1px 1px, var(--dots) 1px, transparent 0) 0 0 / 22px 22px,
     var(--canvas);
 }
 
 .empty-card {
+  border: 1px solid var(--elevated-border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -329,14 +335,15 @@ body {
   inset: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at 1px 1px, rgb(0 0 0 / 0.06) 1px, transparent 0) 0 0 / 22px 22px,
+    radial-gradient(circle at 1px 1px, var(--dots) 1px, transparent 0) 0 0 / 22px 22px,
     var(--canvas);
 }
 
 .device {
   position: absolute;
   border-radius: 4px;
-  background: var(--surface);
+  /* 生徒のサイトの既定の背景は白なので、枠の中は白にする */
+  background: #ffffff;
   box-shadow:
     0 0 0 1px rgb(0 0 0 / 0.08),
     var(--shadow-2);
@@ -368,6 +375,7 @@ body {
 /* ---- 左上のプロジェクト名 ---- */
 
 .project-chip {
+  border: 1px solid var(--elevated-border);
   position: absolute;
   top: 12px;
   left: 12px;
@@ -458,6 +466,7 @@ body {
 }
 
 .menu {
+  border: 1px solid var(--elevated-border);
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
@@ -516,10 +525,11 @@ body {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgb(20 20 24 / 0.4);
+  background: rgb(0 0 0 / 0.55);
 }
 
 .dialog {
+  border: 1px solid var(--elevated-border);
   width: min(440px, 100%);
   padding: 24px;
   border-radius: 16px;
@@ -547,6 +557,7 @@ body {
 /* ---- 下のツールバー（アイコンだけ） ---- */
 
 .toolbar {
+  border: 1px solid var(--elevated-border);
   position: absolute;
   bottom: 20px;
   left: 50%;
@@ -585,6 +596,7 @@ body {
 /* ---- 上の中央の幅の切り替え ---- */
 
 .device-switcher {
+  border: 1px solid var(--elevated-border);
   position: absolute;
   top: 12px;
   left: 50%;
@@ -676,6 +688,38 @@ body {
   box-shadow:
     0 0 0 3px var(--accent),
     var(--shadow-2);
+}
+
+/* 枠の端の近くでは、ピンの先の向きを変えて本体を枠の内側に収める */
+.pin[data-flip="down-right"] {
+  border-radius: 4px 50% 50% 50%;
+  transform-origin: 0 0;
+}
+
+.pin[data-flip="up-left"] {
+  border-radius: 50% 50% 4px 50%;
+  transform-origin: 100% 100%;
+}
+
+.pin[data-flip="down-left"] {
+  border-radius: 50% 4px 50% 50%;
+  transform-origin: 100% 0;
+}
+
+.pin[data-flip^="down"] .pin-preview {
+  top: 0;
+  bottom: auto;
+  border-radius: 4px 12px 12px 12px;
+}
+
+.pin[data-flip$="left"] .pin-preview {
+  right: calc(100% + 8px);
+  left: auto;
+}
+
+/* 開いたコメント・入力欄も暗い背景から浮いて見えるよう、うすい縁を付ける */
+.popover-thread {
+  border: 1px solid var(--elevated-border);
 }
 
 .pin-draft {
@@ -933,6 +977,7 @@ body {
 }
 
 .more-menu {
+  border: 1px solid var(--elevated-border);
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
@@ -963,7 +1008,7 @@ body {
 }
 
 .more-item-danger {
-  color: #fca5a5 !important;
+  color: var(--danger-ink) !important;
 }
 
 .more-item-danger:hover {
@@ -1048,7 +1093,7 @@ body {
 
 .clist-item[data-active="true"] {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px #dbe6ff;
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .clist-item[data-status="orphaned"] {
@@ -1108,7 +1153,7 @@ body {
   padding: 2px 8px;
   border-radius: 6px;
   background: var(--danger-soft);
-  color: #b91c1c;
+  color: var(--danger-ink);
   font-size: 12px;
   font-weight: 700;
 }

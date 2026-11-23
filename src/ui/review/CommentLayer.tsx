@@ -43,6 +43,23 @@ interface Point {
 }
 
 /**
+ * ピンの置き方。ピンの先（とがった角）が point に来るように置く。
+ * 枠の上端・右端の近くでは、ピンの本体が枠の外（プロジェクト名などの上）にはみ出さないよう、
+ * 下向き・左向きに反転する
+ */
+function placePin(point: Point, geometry: FrameGeometry) {
+  const flipY = point.y < PIN_SIZE;
+  const flipX = point.x + PIN_SIZE > geometry.width;
+  return {
+    style: {
+      left: flipX ? point.x - PIN_SIZE : point.x,
+      top: flipY ? point.y : point.y - PIN_SIZE,
+    },
+    flip: flipX || flipY ? `${flipY ? "down" : "up"}-${flipX ? "left" : "right"}` : undefined,
+  };
+}
+
+/**
  * プレビューの上に重ねるコメントの層（Figma のコメントのように、クリックした場所にピンを立てる）。
  * ピンは要素に紐付いていて、要素の中の割合で位置を持つ。プレビューの幅を変えても、
  * スクロールしても、要素の中の同じあたりに立つ（ピンは動かせない）。
@@ -116,7 +133,8 @@ export function CommentLayer(props: CommentLayerProps) {
             data-active={isActive ? "true" : undefined}
             aria-label={`コメント ${number ?? ""}を開く`}
             aria-pressed={isActive}
-            style={{ left: point.x, top: point.y - PIN_SIZE }}
+            style={placePin(point, geometry).style}
+            data-flip={placePin(point, geometry).flip}
             onClick={() => (isActive ? props.onClose() : props.onSelectComment(pin.commentId))}
           >
             <span className="pin-number">{number}</span>
@@ -147,7 +165,8 @@ export function CommentLayer(props: CommentLayerProps) {
           <span
             className="pin pin-draft"
             aria-hidden="true"
-            style={{ left: composerPoint.x, top: composerPoint.y - PIN_SIZE }}
+            style={placePin(composerPoint, geometry).style}
+            data-flip={placePin(composerPoint, geometry).flip}
           />
           <div
             className="popover popover-composer"
