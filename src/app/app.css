@@ -690,33 +690,6 @@ body {
     var(--shadow-2);
 }
 
-/* 枠の端の近くでは、ピンの先の向きを変えて本体を枠の内側に収める */
-.pin[data-flip="down-right"] {
-  border-radius: 4px 50% 50% 50%;
-  transform-origin: 0 0;
-}
-
-.pin[data-flip="up-left"] {
-  border-radius: 50% 50% 4px 50%;
-  transform-origin: 100% 100%;
-}
-
-.pin[data-flip="down-left"] {
-  border-radius: 50% 4px 50% 50%;
-  transform-origin: 100% 0;
-}
-
-.pin[data-flip^="down"] .pin-preview {
-  top: 0;
-  bottom: auto;
-  border-radius: 4px 12px 12px 12px;
-}
-
-.pin[data-flip$="left"] .pin-preview {
-  right: calc(100% + 8px);
-  left: auto;
-}
-
 /* 開いたコメント・入力欄も暗い背景から浮いて見えるよう、うすい縁を付ける */
 .popover-thread {
   border: 1px solid var(--elevated-border);
@@ -732,9 +705,10 @@ body {
   font-weight: 700;
 }
 
+/* 長い本文でも上に伸びないよう、ピンの上端から下へ伸ばす */
 .pin-preview {
   position: absolute;
-  bottom: 0;
+  top: 0;
   left: calc(100% + 8px);
   display: none;
   flex-direction: column;
@@ -742,7 +716,7 @@ body {
   width: max-content;
   max-width: 280px;
   padding: 8px 12px;
-  border-radius: 12px 12px 12px 4px;
+  border-radius: 4px 12px 12px 12px;
   background: var(--dock);
   color: #fff;
   box-shadow: var(--shadow-2);

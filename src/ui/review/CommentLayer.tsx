@@ -43,20 +43,12 @@ interface Point {
 }
 
 /**
- * ピンの置き方。ピンの先（とがった角）が point に来るように置く。
- * 枠の上端・右端の近くでは、ピンの本体が枠の外（プロジェクト名などの上）にはみ出さないよう、
- * 下向き・左向きに反転する
+ * ピンの置き方。ピンの先（左下のとがった角）が point に来るように置く。
+ * 枠の上端の要素では本体が枠の上にはみ出すが、枠の上にはピン 1 本分の余白を空けてあるので、
+ * プロジェクト名などの浮いている部品には重ならない（geometry.ts の PAD_TOP）
  */
-function placePin(point: Point, geometry: FrameGeometry) {
-  const flipY = point.y < PIN_SIZE;
-  const flipX = point.x + PIN_SIZE > geometry.width;
-  return {
-    style: {
-      left: flipX ? point.x - PIN_SIZE : point.x,
-      top: flipY ? point.y : point.y - PIN_SIZE,
-    },
-    flip: flipX || flipY ? `${flipY ? "down" : "up"}-${flipX ? "left" : "right"}` : undefined,
-  };
+function placePin(point: Point) {
+  return { left: point.x, top: point.y - PIN_SIZE };
 }
 
 /**
@@ -133,8 +125,7 @@ export function CommentLayer(props: CommentLayerProps) {
             data-active={isActive ? "true" : undefined}
             aria-label={`コメント ${number ?? ""}を開く`}
             aria-pressed={isActive}
-            style={placePin(point, geometry).style}
-            data-flip={placePin(point, geometry).flip}
+            style={placePin(point)}
             onClick={() => (isActive ? props.onClose() : props.onSelectComment(pin.commentId))}
           >
             <span className="pin-number">{number}</span>
@@ -162,12 +153,7 @@ export function CommentLayer(props: CommentLayerProps) {
 
       {composerPoint && (
         <>
-          <span
-            className="pin pin-draft"
-            aria-hidden="true"
-            style={placePin(composerPoint, geometry).style}
-            data-flip={placePin(composerPoint, geometry).flip}
-          />
+          <span className="pin pin-draft" aria-hidden="true" style={placePin(composerPoint)} />
           <div
             className="popover popover-composer"
             role="dialog"

@@ -410,7 +410,7 @@ describe("選択の連動", () => {
     expect(pin().getAttribute("draggable")).not.toBe("true");
   });
 
-  it("枠の上端にある要素のピンは下向きにして、枠の外（プロジェクト名など）に重ねない", async () => {
+  it("枠の上端にある要素のピンも向きを変えず、ピンの先を要素の上に置く", async () => {
     const { deps } = createDeps();
     await restoreProject(deps);
     fireEvent.click(screen.getByTestId("device-mobile"));
@@ -433,9 +433,10 @@ describe("選択の連動", () => {
       ),
     );
     const pin = await screen.findByRole("button", { name: /コメント 1を開く/ });
-    expect(pin).toHaveAttribute("data-flip", "down-right");
-    // ピンの本体が枠の内側（top >= 0）にある
-    expect(pin.style.top).toBe("0px");
+    // 本体は枠の上の余白に収まる（枠の上端より上、ピン 1 本分）
+    expect(pin.style.top).toBe("-32px");
+    expect(pin.style.left).toBe("0px");
+    expect(pin.hasAttribute("data-flip")).toBe(false);
   });
 
   it("Escape で選択を外し、入力欄を閉じる", async () => {
