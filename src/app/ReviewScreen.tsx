@@ -1,15 +1,11 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PreviewFrame as DefaultPreviewFrame } from "../preview";
 import type { FrameToParentMessage, ParentToFrameMessage } from "../shared";
 import type { SourceStore } from "../store";
-import { sortComments } from "../ui/comments/sortComments";
-import { CommentLayer } from "../ui/review/CommentLayer";
-import { CommentPanel } from "../ui/review/CommentPanel";
 import { DevPanel, type DevView } from "../ui/review/DevPanel";
 import { DeviceCanvas } from "../ui/review/DeviceCanvas";
 import { DEVICES, type DeviceId } from "../ui/review/devices";
 import { ProjectMenu, type SaveStatus } from "../ui/review/ProjectMenu";
-import { createRectStore } from "../ui/review/rectStore";
 import { ResizablePanel } from "../ui/review/ResizablePanel";
 import { Toolbar } from "../ui/review/Toolbar";
 import type { AppDeps } from "./deps";
@@ -27,7 +23,7 @@ export interface ReviewScreenProps {
   onDeleteProject: () => void;
 }
 
-const TOOL_KEYS: Record<string, Tool> = { v: "browse", c: "comment", d: "dev" };
+const TOOL_KEYS: Record<string, Tool> = { v: "browse", d: "dev" };
 const DEVICE_STORAGE_KEY = "review-tool:device";
 
 function loadDevice(): DeviceId {
@@ -58,8 +54,8 @@ function isTyping(target: EventTarget | null): boolean {
 
 /**
  * 1 つのプロジェクトのレビュー画面。プレビューを画面いっぱいに置き、
- * 下のツールバーで「操作 / コメント / 開発」とプレビューの幅を切り替える。
- * 右のパネルはコメント・開発モードのときだけ出す
+ * 下のツールバーで View mode / Dev mode を、上でプレビューの幅を切り替える。
+ * 右のパネルは Dev mode のときだけ出す
  */
 export function ReviewScreen({
   store,
@@ -74,7 +70,6 @@ export function ReviewScreen({
 }: ReviewScreenProps) {
   const [controller] = useState(() => new ReviewController({ store, isDev: deps.isDev }));
   const state = useSyncExternalStore(controller.subscribe, controller.getState);
-  const [rects] = useState(createRectStore);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [device, setDevice] = useState<DeviceId>(loadDevice);
   const [devView, setDevView] = useState<DevView>("element");
@@ -95,7 +90,7 @@ export function ReviewScreen({
     saveDevice(next);
   }
 
-  // ショートカット: V / C / D でツール、1 / 2 / 3 で幅、Escape で選択を外す
+  // ショートカット: V / D でモード、1 / 2 / 3 で幅、Escape で選択を外す
   function handleKey(key: string) {
     const nextTool = TOOL_KEYS[key];
     if (nextTool) {
@@ -129,9 +124,6 @@ export function ReviewScreen({
 
   function handleFrameMessage(message: FrameToParentMessage) {
     switch (message.type) {
-      case "review:rects":
-        rects.set(message.rects);
-        return;
       case "review:key":
         handleKey(message.key);
         return;
@@ -142,13 +134,6 @@ export function ReviewScreen({
     }
     controller.handleFrameMessage(message);
   }
-
-  const sorted = useMemo(() => sortComments([...state.comments]), [state.comments]);
-  const numbers = useMemo(() => {
-    const result: Record<string, number> = {};
-    sorted.forEach((comment, index) => (result[comment.id] = index + 1));
-    return result;
-  }, [sorted]);
 
   const Frame = deps.PreviewFrame ?? DefaultPreviewFrame;
 
@@ -175,32 +160,7 @@ export function ReviewScreen({
             プレビューできる HTML ファイルがありません
           </p>
         ) : (
-          <DeviceCanvas
-            device={device}
-            onDeviceChange={changeDevice}
-            overlay={
-              tool === "comment"
-                ? (geometry) => (
-                    <CommentLayer
-                      geometry={geometry}
-                      rects={rects}
-                      pins={state.pins}
-                      comments={state.comments}
-                      numbers={numbers}
-                      activeCommentId={state.activeCommentId}
-                      selectedId={state.selectedId}
-                      selectedPoint={state.selectedPoint}
-                      disabledReason={state.commentDisabledReason}
-                      onSelectComment={(id) => controller.selectComment(id)}
-                      onAddComment={(body) => controller.addComment(body)}
-                      onUpdateComment={(id, body) => controller.updateComment(id, body)}
-                      onDeleteComment={(id) => controller.deleteComment(id)}
-                      onClose={() => controller.clearSelection()}
-                    />
-                  )
-                : undefined
-            }
-          >
+          <DeviceCanvas device={device} onDeviceChange={changeDevice}>
             <Frame
               className="preview"
               sessionId={store.projectId}
@@ -234,17 +194,6 @@ export function ReviewScreen({
         <Toolbar tool={tool} onToolChange={(next) => controller.setTool(next)} />
       </div>
 
-      {tool === "comment" && (
-        <ResizablePanel storageKey="comment" label="コメント" defaultWidth={340}>
-          <CommentPanel
-            comments={sorted}
-            numbers={numbers}
-            activeId={state.activeCommentId}
-            onSelect={(id) => controller.selectComment(id)}
-            onDelete={(id) => controller.deleteComment(id)}
-          />
-        </ResizablePanel>
-      )}
       {tool === "dev" && (
         <ResizablePanel storageKey="dev" label="開発" defaultWidth={520} minWidth={340}>
           <DevPanel

@@ -366,12 +366,6 @@ body {
   color: var(--ink-2);
 }
 
-.device-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
 /* ---- 左上のプロジェクト名 ---- */
 
 .project-chip {
@@ -393,10 +387,11 @@ body {
 .project-trigger {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  height: 36px;
-  padding: 0 8px 0 4px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  color: var(--ink-2) !important;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -408,20 +403,12 @@ body {
   background: var(--surface-2);
 }
 
-.project-mark {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  background: var(--accent);
-  color: #fff;
-}
-
 .project-name {
   overflow: hidden;
   max-width: 240px;
-  font-weight: 700;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -439,7 +426,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 10px 0 6px;
+  padding: 0 10px 0 2px;
   color: var(--ink-3);
   font-size: 13px;
   white-space: nowrap;
@@ -563,8 +550,8 @@ body {
   left: 50%;
   z-index: 20;
   display: flex;
-  gap: 4px;
-  padding: 6px;
+  gap: 2px;
+  padding: 4px;
   border-radius: 14px;
   background: var(--dock);
   box-shadow: var(--shadow-2);
@@ -572,24 +559,25 @@ body {
 }
 
 .toolbar-tool {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
+  height: 40px;
+  padding: 0 18px;
   border: none;
   border-radius: 10px;
   background: transparent;
-  color: var(--dock-ink) !important;
+  color: var(--dock-ink-2) !important;
+  font-size: 14px !important;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .toolbar-tool:hover {
-  background: var(--dock-2);
+  color: var(--dock-ink) !important;
 }
 
 .toolbar-tool[aria-checked="true"] {
-  background: var(--accent);
+  background: var(--dock-2);
   color: #fff !important;
 }
 
@@ -602,8 +590,7 @@ body {
   left: 50%;
   z-index: 15;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 2px;
   padding: 4px;
   border-radius: 12px;
   background: var(--surface);
@@ -611,17 +598,12 @@ body {
   transform: translateX(-50%);
 }
 
-.device-switcher-group {
-  display: flex;
-  gap: 2px;
-}
-
 .device-switcher-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 10px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 32px;
+  padding: 0;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -630,364 +612,12 @@ body {
 }
 
 .device-switcher-option:hover {
-  background: var(--surface-2);
   color: var(--ink) !important;
 }
 
 .device-switcher-option[aria-checked="true"] {
-  background: var(--accent-soft);
-  color: var(--accent) !important;
-}
-
-.device-switcher-width {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.device-switcher-zoom {
-  padding: 0 8px 0 2px;
-  color: var(--ink-3);
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
-/* ---- コメントのピンとポップオーバー（Figma 風の暗い吹き出し） ---- */
-
-.comment-layer {
-  position: absolute;
-  inset: 0;
-}
-
-.pin {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 2px solid #fff;
-  border-radius: 50% 50% 50% 4px;
-  background: var(--accent);
-  color: #fff !important;
-  box-shadow: var(--shadow-1);
-  pointer-events: auto;
-  cursor: pointer;
-  transition: transform 0.1s;
-  transform-origin: 0 100%;
-}
-
-.pin:hover {
-  z-index: 2;
-  transform: scale(1.08);
-}
-
-.pin[data-active="true"] {
-  z-index: 3;
-  background: var(--dock);
-  box-shadow:
-    0 0 0 3px var(--accent),
-    var(--shadow-2);
-}
-
-/* 開いたコメント・入力欄も暗い背景から浮いて見えるよう、うすい縁を付ける */
-.popover-thread {
-  border: 1px solid var(--elevated-border);
-}
-
-.pin-draft {
-  background: var(--accent);
-  pointer-events: none;
-}
-
-.pin-number {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-/* 長い本文でも上に伸びないよう、ピンの上端から下へ伸ばす */
-.pin-preview {
-  position: absolute;
-  top: 0;
-  left: calc(100% + 8px);
-  display: none;
-  flex-direction: column;
-  gap: 2px;
-  width: max-content;
-  max-width: 280px;
-  padding: 8px 12px;
-  border-radius: 4px 12px 12px 12px;
-  background: var(--dock);
-  color: #fff;
-  box-shadow: var(--shadow-2);
-  text-align: left;
-  pointer-events: none;
-}
-
-.pin:hover .pin-preview {
-  display: flex;
-}
-
-.pin-preview-time {
-  color: var(--dock-ink-2);
-  font-size: 12px;
-}
-
-.pin-preview-body {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: 15px;
-  line-height: 1.5;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-.popover {
-  position: absolute;
-  z-index: 10;
-  box-sizing: border-box;
-  border-radius: 16px;
-  background: var(--dock);
-  color: var(--dock-ink);
-  box-shadow: var(--shadow-2);
-  pointer-events: auto;
-}
-
-.popover-composer {
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-/* 入力欄（Enter で送信） */
-.cinput {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 6px 6px 6px 16px;
-  border: 1px solid var(--accent);
-  border-radius: 22px;
-  background: var(--dock);
-  box-shadow: var(--shadow-2);
-}
-
-.popover-thread .cinput {
-  border-color: rgb(255 255 255 / 0.14);
-  background: var(--dock-2);
-  box-shadow: none;
-}
-
-.cinput-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.cinput-text {
-  box-sizing: border-box;
-  flex: 1;
-  min-width: 0;
-  max-height: 200px;
-  margin: 0;
-  padding: 7px 0;
-  border: none;
-  outline: none !important;
-  background: transparent;
-  color: #fff;
-  font: inherit;
-  font-size: 16px;
-  line-height: 1.5;
-  resize: none;
-}
-
-.cinput-text::placeholder {
-  color: var(--dock-ink-2);
-}
-
-.cinput-text:disabled {
-  cursor: not-allowed;
-}
-
-.cinput-send {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff !important;
-  cursor: pointer;
-}
-
-.cinput-send:disabled {
-  background: rgb(255 255 255 / 0.16);
-  color: var(--dock-ink-2) !important;
-  cursor: default;
-}
-
-.cinput-reason {
-  margin: 6px 10px 0 0;
-  color: #fbbf77;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-
-/* 開いたコメント */
-.thread-header {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 8px 8px 16px;
-  border-bottom: 1px solid rgb(255 255 255 / 0.1);
-}
-
-.thread-title {
-  flex: 1;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.thread-icon {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--dock-ink) !important;
-  cursor: pointer;
-}
-
-.thread-icon:hover {
-  background: var(--dock-2);
-}
-
-.thread-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px 16px;
-}
-
-.thread-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.thread-number {
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50% 50% 50% 3px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.thread-time {
-  color: var(--dock-ink-2);
-  font-size: 13px;
-}
-
-.thread-text {
-  margin: 0;
-  color: #fff;
-  font-size: 17px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.thread-orphaned {
-  margin: 0;
-  color: #fca5a5;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-/* 「…」メニュー */
-.more {
-  position: relative;
-}
-
-.more-button {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ink-2) !important;
-  cursor: pointer;
-}
-
-.more-button:hover,
-.more[data-open="true"] .more-button {
   background: var(--surface-2);
   color: var(--ink) !important;
-}
-
-.more-dark .more-button {
-  color: var(--dock-ink) !important;
-}
-
-.more-dark .more-button:hover,
-.more-dark[data-open="true"] .more-button {
-  background: var(--dock-2);
-  color: #fff !important;
-}
-
-.more-menu {
-  border: 1px solid var(--elevated-border);
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  min-width: 140px;
-  padding: 4px;
-  border-radius: 10px;
-  background: var(--dock);
-  box-shadow: var(--shadow-2);
-}
-
-.more-item {
-  height: 36px;
-  padding: 0 12px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #fff !important;
-  font-size: 14px !important;
-  text-align: left;
-  cursor: pointer;
-}
-
-.more-item:hover {
-  background: var(--accent);
-}
-
-.more-item-danger {
-  color: var(--danger-ink) !important;
-}
-
-.more-item-danger:hover {
-  background: var(--danger);
-  color: #fff !important;
 }
 
 /* ---- 右のパネル ---- */
@@ -1041,111 +671,6 @@ body {
   user-select: none;
 }
 
-/* コメント一覧（ホバーで「…」が出る） */
-.clist {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.clist-item {
-  position: relative;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
-  transition:
-    border-color 0.12s,
-    background 0.12s;
-}
-
-.clist-item:hover {
-  background: var(--surface-2);
-}
-
-.clist-item[data-active="true"] {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.clist-item[data-status="orphaned"] {
-  border-style: dashed;
-}
-
-.clist-main {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  padding: 12px 14px;
-  border: none;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.clist-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-right: 32px;
-}
-
-.clist-number {
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50% 50% 50% 3px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.clist-time {
-  color: var(--ink-3);
-  font-size: 13px;
-}
-
-.clist-body {
-  color: var(--ink);
-  font-size: 16px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.clist-item[data-status="orphaned"] .clist-body {
-  color: var(--ink-3);
-}
-
-.clist-orphaned {
-  align-self: flex-start;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--danger-soft);
-  color: var(--danger-ink);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.clist-more {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-
-.clist-item:hover .clist-more,
-.clist-more:focus-within,
-.clist-more[data-open="true"] {
-  opacity: 1;
-}
-
 .side-panel-header {
   display: flex;
   align-items: center;
@@ -1158,24 +683,6 @@ body {
 .side-panel-title {
   margin: 0;
   font-size: 16px;
-}
-
-.count-badge {
-  min-width: 22px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.side-panel-body {
-  flex: 1;
-  min-height: 0;
-  padding: 16px;
-  overflow: auto;
 }
 
 .panel-empty {
@@ -1355,4 +862,70 @@ body {
   left: 50%;
   z-index: 30;
   transform: translateX(-50%);
+}
+
+/* 見た目には出さず、読み上げにだけ使う文字 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- Dev mode の「この要素」: HTML と CSS ---- */
+
+.dev-element-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.code-section + .code-section {
+  border-top: 1px solid var(--line);
+}
+
+.code-section-title {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.code-section-empty {
+  margin: 0;
+  padding: 0 16px 16px;
+  color: var(--ink-3);
+  font-size: 14px;
+}
+
+.code-block {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.css-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0 0 16px;
+  list-style: none;
+}
+
+.css-rule-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 0 16px 6px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.css-rule-media {
+  color: var(--warn-ink);
 }

@@ -28,7 +28,7 @@ export function titleColor(page: Page): Promise<string> {
 }
 
 /** 画面下のツールバーでツールを選ぶ */
-export async function chooseTool(page: Page, tool: "browse" | "comment" | "dev"): Promise<void> {
+export async function chooseTool(page: Page, tool: "browse" | "dev"): Promise<void> {
   await page.getByTestId(`tool-${tool}`).click();
   await expect(page.getByTestId("review-screen")).toHaveAttribute("data-tool", tool);
 }

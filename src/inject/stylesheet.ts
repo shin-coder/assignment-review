@@ -85,6 +85,8 @@ interface ReplacedStyle {
 export interface StylesheetReplacer {
   /** path の CSS を text に差し替え、差し替えた <style> の数を返す（見つからなければ 0） */
   replace(path: string, text: string): number;
+  /** 差し替えた <style> の元の CSS ファイルのパス。差し替えたものでなければ null */
+  pathOf(style: Element): string | null;
 }
 
 export function createStylesheetReplacer(doc: Document): StylesheetReplacer {
@@ -133,6 +135,12 @@ export function createStylesheetReplacer(doc: Document): StylesheetReplacer {
       }
       replaced.set(key, targets);
       return targets.length;
+    },
+    pathOf(style) {
+      for (const [path, entries] of replaced) {
+        if (entries.some((entry) => entry.style === style)) return path;
+      }
+      return null;
     },
   };
 }

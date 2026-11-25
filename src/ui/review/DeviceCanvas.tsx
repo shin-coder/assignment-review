@@ -10,15 +10,13 @@ export interface DeviceCanvasProps {
   onDeviceChange: (device: DeviceId) => void;
   /** iframe（プレビュー）。デバイスの幅で描き、縮小は親がまとめて行う */
   children: ReactNode;
-  /** 枠の上に重ねる層（コメントのピンなど）。画面上の座標で描く */
-  overlay?: (geometry: FrameGeometry) => ReactNode;
 }
 
 /**
  * 灰色のキャンバスの中央に、選んだデバイスの幅でプレビューを置く。
  * 入りきらない幅（PC の 1440px など）は、iframe のビューポートの幅を変えずに縮小して見せる
  */
-export function DeviceCanvas({ device, onDeviceChange, children, overlay }: DeviceCanvasProps) {
+export function DeviceCanvas({ device, onDeviceChange, children }: DeviceCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(FALLBACK);
 
@@ -68,7 +66,6 @@ export function DeviceCanvas({ device, onDeviceChange, children, overlay }: Devi
         >
           {children}
         </div>
-        {overlay && <div className="device-overlay">{overlay(geometry)}</div>}
       </div>
     </div>
   );

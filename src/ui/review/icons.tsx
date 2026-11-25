@@ -29,12 +29,6 @@ export const CursorIcon = (p: IconProps) => (
   </Icon>
 );
 
-export const CommentIcon = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M12 3.5a8.5 8.5 0 1 1-4.2 15.9L3.5 20.5l1.1-4.2A8.5 8.5 0 0 1 12 3.5Z" />
-  </Icon>
-);
-
 export const CodeIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15" />
@@ -97,23 +91,5 @@ export const FileIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5L14 3Z" />
     <path d="M14 3v4.5h4.5" />
-  </Icon>
-);
-
-export const MoreIcon = (p: IconProps) => (
-  <Icon {...p} strokeWidth={2.6}>
-    <path d="M5.5 12h.01M12 12h.01M18.5 12h.01" />
-  </Icon>
-);
-
-export const ArrowUpIcon = (p: IconProps) => (
-  <Icon {...p} strokeWidth={2.2}>
-    <path d="M12 19V5M6 11l6-6 6 6" />
-  </Icon>
-);
-
-export const CheckIcon = (p: IconProps) => (
-  <Icon {...p} strokeWidth={2.2}>
-    <path d="m5 12.5 4.5 4.5L19 7.5" />
   </Icon>
 );

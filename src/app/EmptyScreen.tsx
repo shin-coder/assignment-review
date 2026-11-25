@@ -1,6 +1,6 @@
 import { useState, type DragEvent } from "react";
 import type { DirectoryHandleLike } from "../loader";
-import { CodeIcon, CommentIcon, FolderIcon } from "../ui/review/icons";
+import { CodeIcon, CursorIcon, FolderIcon } from "../ui/review/icons";
 
 export interface EmptyScreenProps {
   /** showDirectoryPicker が使えるか */
@@ -64,7 +64,7 @@ export function EmptyScreen({ supported, busy, onPick, onDrop }: EmptyScreenProp
     >
       <div className="empty-card">
         <span className="empty-logo" aria-hidden="true">
-          <CommentIcon size={26} />
+          <CodeIcon size={26} />
         </span>
         <h1 className="empty-title">生徒サイト レビューツール</h1>
         <p className="empty-lead">生徒のサイトのフォルダを選んでください。</p>
@@ -98,16 +98,16 @@ export function EmptyScreen({ supported, busy, onPick, onDrop }: EmptyScreenProp
 
         <ul className="empty-features">
           <li>
-            <CommentIcon size={18} />
-            要素をクリックしてコメント
+            <CursorIcon size={18} />
+            サイトをそのまま操作して確認
           </li>
           <li>
             <CodeIcon size={18} />
-            HTML / CSS / JS をその場で編集
+            要素の HTML / CSS をその場で編集
           </li>
         </ul>
         <p className="empty-note">
-          読み込んだフォルダには書き込みません。編集とコメントはこのブラウザだけに保存されます。
+          読み込んだフォルダには書き込みません。編集はこのブラウザだけに保存されます。
         </p>
       </div>
     </main>

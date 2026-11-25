@@ -11,7 +11,6 @@ import { classifyEdit, isNoopChange, replaceFile } from "../edit";
 import { findElementAt } from "../parser";
 import {
   PREVIEW_PREFIX,
-  clampPinPoint,
   normalizePath,
   type ElementId,
   type ElementInfo,
@@ -19,7 +18,7 @@ import {
   type ParentToFrameMessage,
   type FrameToParentMessage,
   type FrameMode,
-  type PinPoint,
+  type MatchedCssRule,
   type ReviewComment,
   type SourceLocation,
   type TextChange,
@@ -36,24 +35,17 @@ import {
 } from "./previewFiles";
 
 /** JS が生成した要素を選んだときに出す文 */
-export const GENERATED_NOTICE = "JS が生成した要素は編集・コメントの対象外です";
+export const GENERATED_NOTICE = "JS が生成した要素は編集の対象外です";
 const IMPLICIT_REASON = "ソースに記述のない要素にはコメントできません";
 
 export type FrameSender = (message: ParentToFrameMessage) => void;
 
 /**
- * 画面下のツールバーで選ぶツール。
- * - "browse": 生徒のサイトをそのまま操作する（リンク・JS も動く）
- * - "comment": 要素をクリックしてコメントを付ける
- * - "dev": 要素をクリックしてそのコードを見る・編集する
+ * 画面下のツールバーで選ぶモード。
+ * - "browse"（View mode）: 生徒のサイトをそのまま操作する（リンク・JS も動く）
+ * - "dev"（Dev mode）: 要素をクリックしてその HTML と CSS を見る・編集する
  */
-export type Tool = "browse" | "comment" | "dev";
-
-/** 表示中の HTML でコメントのピンを立てる位置 */
-export interface CommentPin {
-  commentId: string;
-  elementId: ElementId;
-}
+export type Tool = "browse" | "dev";
 
 export interface ReviewState {
   tool: Tool;
@@ -64,10 +56,8 @@ export interface ReviewState {
   selectionSeq: number;
   /** 選択中の要素のソース上の範囲。ソースに開始タグのない要素・JS 生成要素なら null */
   selectedLocation: SourceLocation | null;
-  /** 表示中の HTML のコメントのピン（対応する要素が見つかるものだけ） */
-  pins: readonly CommentPin[];
-  /** プレビューで要素をクリックした位置（要素の左上からのずれ）。新しいコメントのピンの位置になる */
-  selectedPoint: PinPoint | null;
+  /** プレビューで選んだ要素に当たっている CSS ルール（ソースの順）。プレビュー以外で選んだときは空 */
+  selectedRules: readonly MatchedCssRule[];
   /** iframe が最初に開くパス。HTML がなければ null */
   entryPath: string | null;
   /** いま iframe に表示している HTML */
@@ -102,7 +92,7 @@ export interface ReviewState {
 
 type Core = {
   tool: Tool;
-  selectedPoint: PinPoint | null;
+  selectedRules: readonly MatchedCssRule[];
   selectionSeq: number;
   entryPath: string | null;
   currentPage: string | null;
@@ -137,8 +127,6 @@ export class ReviewController {
   private readonly pages = new Map<string, PageInfo>();
   private readonly listeners = new Set<() => void>();
   private sender: FrameSender | null = null;
-  /** 最後に iframe へ送った review:track の内容 */
-  private lastTrackKey: string | null = null;
   private core: Core;
   private state: ReviewState;
 
@@ -152,7 +140,7 @@ export class ReviewController {
       (this.pages.has("index.html") ? "index.html" : (htmlPaths[0] ?? null));
     this.core = {
       tool: "browse",
-      selectedPoint: null,
+      selectedRules: [],
       selectionSeq: 0,
       entryPath: first,
       currentPage: first,
@@ -183,7 +171,6 @@ export class ReviewController {
   /** iframe へ送る関数を設定する。iframe がないときは null */
   attachFrame(sender: FrameSender | null): void {
     this.sender = sender;
-    this.lastTrackKey = null;
   }
 
   // ---- 内部 ----
@@ -209,7 +196,6 @@ export class ReviewController {
   private commit(patch: Partial<Core>): void {
     this.core = { ...this.core, ...patch };
     this.state = this.derive();
-    this.syncTrack();
     for (const listener of [...this.listeners]) listener();
   }
 
@@ -227,22 +213,6 @@ export class ReviewController {
     this.send({ type: "review:highlight", elementId: this.core.selectedId });
   }
 
-  /** コメントモードの間だけ、ピンと選択中の要素の矩形を iframe に知らせてもらう */
-  private trackIds(): ElementId[] {
-    if (this.core.tool !== "comment") return [];
-    const ids = new Set(this.state.pins.map((pin) => pin.elementId));
-    if (this.state.selectedId !== null) ids.add(this.state.selectedId);
-    return [...ids];
-  }
-
-  private syncTrack(force = false): void {
-    const elementIds = this.trackIds();
-    const key = elementIds.join("\u0000");
-    if (!force && key === this.lastTrackKey) return;
-    this.lastTrackKey = key;
-    this.send({ type: "review:track", elementIds });
-  }
-
   private send(message: ParentToFrameMessage): void {
     this.sender?.(message);
   }
@@ -253,7 +223,6 @@ export class ReviewController {
     const comments = this.store.getComments();
     const commentLabels: Record<string, string> = {};
     const commentedIds = new Set<ElementId>();
-    const pins: CommentPin[] = [];
     for (const comment of comments) {
       if (comment.status !== "active") continue;
       const target = this.pages.get(comment.location.filePath);
@@ -262,10 +231,7 @@ export class ReviewController {
       if (id === null) continue;
       const label = target.labels.get(id);
       if (label !== undefined) commentLabels[comment.id] = label;
-      if (target === page) {
-        commentedIds.add(id);
-        pins.push({ commentId: comment.id, elementId: id });
-      }
+      if (target === page) commentedIds.add(id);
     }
     const { core } = this;
     let commentDisabledReason: string | null = null;
@@ -277,8 +243,7 @@ export class ReviewController {
       tool: core.tool,
       selectionSeq: core.selectionSeq,
       selectedLocation: core.generated ? null : (info?.location ?? null),
-      pins,
-      selectedPoint: core.selectedPoint,
+      selectedRules: core.selectedRules,
       entryPath: core.entryPath,
       currentPage: core.currentPage,
       rebuildKey: core.rebuildKey,
@@ -329,14 +294,14 @@ export class ReviewController {
 
   private select(
     id: ElementId | null,
-    options: { generated?: boolean; fromEditor?: boolean; point?: PinPoint } = {},
+    options: { generated?: boolean; fromEditor?: boolean; rules?: readonly MatchedCssRule[] } = {},
   ): void {
     const info = id === null ? null : (this.page()?.analysis.map.get(id) ?? null);
     const selectedId = info ? info.id : null;
     const patch: Partial<Core> = {
       selectionSeq: this.core.selectionSeq + 1,
       selectedId,
-      selectedPoint: selectedId === null ? null : (options.point ?? null),
+      selectedRules: selectedId === null ? [] : (options.rules ?? []),
       generated: options.generated ?? false,
       highlightHidden: options.fromEditor ?? false,
       highlightOverride: null,
@@ -380,9 +345,7 @@ export class ReviewController {
         // 作り直し直後の iframe にモード・選択の枠・追跡する要素を付け直す
         this.send(this.modeMessage());
         this.sendHighlight();
-        this.syncTrack(true);
         break;
-      case "review:rects":
       case "review:key":
         // 画面（React）側で扱う
         break;
@@ -393,12 +356,8 @@ export class ReviewController {
         break;
       }
       case "review:select":
-        // JS 生成要素は祖先を選んで案内を出す（祖先がなければ選択なし）。
-        // コメントモードでは案内を出さず、ソースにある一番近い祖先に黙って紐付ける
-        this.select(message.elementId, {
-          generated: message.generated && this.core.tool !== "comment",
-          point: message.point,
-        });
+        // JS 生成要素は祖先を選んで案内を出す（祖先がなければ選択なし）
+        this.select(message.elementId, { generated: message.generated, rules: message.rules });
         break;
     }
   }
@@ -615,10 +574,7 @@ export class ReviewController {
       this.commit({ message: result.message });
       return { ok: false, message: result.message };
     }
-    const point = this.core.selectedPoint;
-    this.store.addComment(
-      point ? { ...result.comment, pin: clampPinPoint(point) } : result.comment,
-    );
+    this.store.addComment(result.comment);
     this.commit({ activeCommentId: result.comment.id, message: null });
     this.sendHighlight();
     return { ok: true, id: result.comment.id };
