@@ -29,12 +29,6 @@ export const CursorIcon = (p: IconProps) => (
   </Icon>
 );
 
-export const CommentIcon = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M12 3.5a8.5 8.5 0 1 1-4.2 15.9L3.5 20.5l1.1-4.2A8.5 8.5 0 0 1 12 3.5Z" />
-  </Icon>
-);
-
 export const CodeIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15" />
@@ -100,20 +94,23 @@ export const FileIcon = (p: IconProps) => (
   </Icon>
 );
 
-export const MoreIcon = (p: IconProps) => (
-  <Icon {...p} strokeWidth={2.6}>
-    <path d="M5.5 12h.01M12 12h.01M18.5 12h.01" />
+/** ロゴの「重なった層」 */
+export const LayersIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m12 3 9 4.5-9 4.5-9-4.5L12 3Z" />
+    <path d="m3 12 9 4.5 9-4.5" />
+    <path d="m3 16.5 9 4.5 9-4.5" />
   </Icon>
 );
 
-export const ArrowUpIcon = (p: IconProps) => (
-  <Icon {...p} strokeWidth={2.2}>
-    <path d="M12 19V5M6 11l6-6 6 6" />
+export const UploadIcon = (p: IconProps) => (
+  <Icon {...p} strokeWidth={2}>
+    <path d="M5 4.5h14M12 20V9M7 13.5 12 8.5l5 5" />
   </Icon>
 );
 
-export const CheckIcon = (p: IconProps) => (
-  <Icon {...p} strokeWidth={2.2}>
-    <path d="m5 12.5 4.5 4.5L19 7.5" />
+export const ArrowLeftIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M19 12H5M11 6l-6 6 6 6" />
   </Icon>
 );

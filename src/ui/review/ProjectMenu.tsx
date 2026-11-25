@@ -71,13 +71,10 @@ export function ProjectMenu(props: ProjectMenuProps) {
         data-testid="project-menu"
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="project-mark" aria-hidden="true">
-          <FolderIcon size={16} />
-        </span>
         <span className="project-name" title={props.name}>
           {props.name}
         </span>
-        <ChevronDownIcon size={16} />
+        <ChevronDownIcon size={14} />
       </button>
 
       {props.pages.length > 1 && (
@@ -101,10 +98,12 @@ export function ProjectMenu(props: ProjectMenuProps) {
         data-testid="save-status"
         data-status={props.saveStatus}
         role="status"
-        title={props.saveError ?? undefined}
+        title={props.saveError ?? SAVE_LABELS[props.saveStatus]}
       >
-        <span className="save-dot" aria-hidden="true" />
-        {SAVE_LABELS[props.saveStatus]}
+        {/* 保存済みのときは何も出さず、保存中・失敗のときだけ点を出す */}
+        {props.saveStatus !== "saved" && <span className="save-dot" aria-hidden="true" />}
+        {/* 見た目は点だけにし、文字は読み上げとホバーで伝える */}
+        <span className="visually-hidden">{SAVE_LABELS[props.saveStatus]}</span>
       </span>
 
       {open && (

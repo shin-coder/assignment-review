@@ -314,75 +314,71 @@ describe("購読", () => {
   });
 });
 
-describe("ツールの切り替え", () => {
-  it("最初は操作ツール。切り替えると iframe にモードを送る", () => {
+describe("モードの切り替え", () => {
+  it("最初は View mode。切り替えると iframe にモードを送る", () => {
     const { controller, sent } = setup();
     expect(controller.getState().tool).toBe("browse");
-    controller.setTool("comment");
-    expect(controller.getState().tool).toBe("comment");
-    expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
     controller.setTool("dev");
+    expect(controller.getState().tool).toBe("dev");
     expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
     controller.setTool("browse");
     expect(sent).toContainEqual({ type: "review:mode", mode: "browse" });
   });
 
-  it("切り替えても選択は残る", () => {
-    const { controller } = setup();
-    controller.setTool("comment");
-    const id = idOf(controller.getState(), "p.a");
-    controller.handleFrameMessage({ type: "review:select", elementId: id, generated: false });
-    controller.setTool("dev");
-    expect(controller.getState().selectedId).toBe(id);
-  });
-
-  it("review:ready でモードを送り直す", () => {
+  it("review:ready でモードと選択の枠を送り直す", () => {
     const { controller, sent } = setup();
     controller.setTool("dev");
+    const id = idOf(controller.getState(), "p.a");
+    controller.selectFromTree(id);
     sent.length = 0;
     controller.handleFrameMessage({ type: "review:ready" });
     expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
+    expect(sent).toContainEqual({ type: "review:highlight", elementId: id });
+  });
+
+  it("clearSelection で選択を外す", () => {
+    const { controller, sent } = setup();
+    controller.selectFromTree(idOf(controller.getState(), "p.a"));
+    controller.clearSelection();
+    expect(controller.getState().selectedId).toBeNull();
+    expect(sent.at(-1)).toEqual({ type: "review:highlight", elementId: null });
   });
 });
 
-describe("コメントのピンと矩形の追跡", () => {
-  it("コメントモードの間だけ、ピンの要素と選択中の要素の追跡を頼む", () => {
-    const { controller, sent } = setup();
-    const a = idOf(controller.getState(), "p.a");
-    const b = idOf(controller.getState(), "p.b");
-    controller.selectFromTree(a);
-    controller.addComment("a のコメント");
-    expect(controller.getState().pins).toEqual([{ commentId: expect.any(String), elementId: a }]);
-    // 操作ツールの間は何も追跡しない
-    expect(sent.filter((m) => m.type === "review:track" && m.elementIds.length > 0)).toEqual([]);
+describe("選んだ要素に当たっている CSS ルール", () => {
+  const rule = { path: "style.css", selector: "h1", media: null, occurrence: 0, cssText: "h1 {}" };
 
-    controller.setTool("comment");
-    expect(sent).toContainEqual({ type: "review:track", elementIds: [a] });
-
-    controller.selectFromTree(b);
-    expect(sent).toContainEqual({ type: "review:track", elementIds: [a, b] });
-
-    controller.setTool("browse");
-    expect(sent).toContainEqual({ type: "review:track", elementIds: [] });
+  it("プレビューで選んだときに iframe から届いたルールを持つ", () => {
+    const { controller } = setup();
+    const id = idOf(controller.getState(), "h1");
+    controller.handleFrameMessage({
+      type: "review:select",
+      elementId: id,
+      generated: false,
+      rules: [rule],
+    });
+    expect(controller.getState().selectedRules).toEqual([rule]);
   });
 
-  it("review:ready では同じ内容でも追跡を頼み直す", () => {
-    const { controller, sent } = setup();
-    controller.setTool("comment");
-    sent.length = 0;
-    controller.handleFrameMessage({ type: "review:ready" });
-    expect(sent).toContainEqual({ type: "review:track", elementIds: [] });
-  });
-
-  it("clearSelection で選択とコメントの選択を外す", () => {
-    const { controller, sent } = setup();
+  it("別の方法で選び直したり、選択を外したりすると空になる", () => {
+    const { controller } = setup();
+    const id = idOf(controller.getState(), "h1");
+    controller.handleFrameMessage({
+      type: "review:select",
+      elementId: id,
+      generated: false,
+      rules: [rule],
+    });
     controller.selectFromTree(idOf(controller.getState(), "p.a"));
-    const { id } = controller.addComment("x") as { ok: true; id: string };
-    expect(controller.getState().activeCommentId).toBe(id);
+    expect(controller.getState().selectedRules).toEqual([]);
+    controller.handleFrameMessage({
+      type: "review:select",
+      elementId: id,
+      generated: false,
+      rules: [rule],
+    });
     controller.clearSelection();
-    expect(controller.getState().selectedId).toBeNull();
-    expect(controller.getState().activeCommentId).toBeNull();
-    expect(sent.at(-1)).toEqual({ type: "review:highlight", elementId: null });
+    expect(controller.getState().selectedRules).toEqual([]);
   });
 });
 
@@ -415,70 +411,5 @@ describe("選択中の要素のソース範囲と selectionSeq", () => {
     const bodyId = idOf(controller.getState(), "body");
     controller.handleFrameMessage({ type: "review:select", elementId: bodyId, generated: true });
     expect(controller.getState().selectedLocation).toBeNull();
-  });
-});
-
-describe("ピンの位置", () => {
-  it("クリックした位置（要素に対する割合）を新しいコメントのピンの位置にする", () => {
-    const { controller, store } = setup();
-    controller.setTool("comment");
-    const id = idOf(controller.getState(), "p.a");
-    controller.handleFrameMessage({
-      type: "review:select",
-      elementId: id,
-      generated: false,
-      point: { x: 0.25, y: 0.5 },
-    });
-    expect(controller.getState().selectedPoint).toEqual({ x: 0.25, y: 0.5 });
-    expect(controller.addComment("ここ").ok).toBe(true);
-    expect(store.getComments()[0]?.pin).toEqual({ x: 0.25, y: 0.5 });
-  });
-
-  it("割合が範囲外なら 0〜1 に収めて保存する", () => {
-    const { controller, store } = setup();
-    controller.handleFrameMessage({
-      type: "review:select",
-      elementId: idOf(controller.getState(), "p.a"),
-      generated: false,
-      point: { x: 1.4, y: -0.2 },
-    });
-    controller.addComment("ここ");
-    expect(store.getComments()[0]?.pin).toEqual({ x: 1, y: 0 });
-  });
-
-  it("位置の分からない選択（ツリー・エディタ）では pin を付けない", () => {
-    const { controller, store } = setup();
-    controller.selectFromTree(idOf(controller.getState(), "p.a"));
-    controller.addComment("ここ");
-    expect(store.getComments()[0]?.pin).toBeUndefined();
-  });
-});
-
-describe("コメントモードの枠", () => {
-  it("コメントモードでも、クリックした要素に枠を付ける", () => {
-    const { controller, sent } = setup();
-    controller.setTool("comment");
-    expect(sent).toContainEqual({ type: "review:mode", mode: "inspect" });
-    const id = idOf(controller.getState(), "p.a");
-    controller.handleFrameMessage({ type: "review:select", elementId: id, generated: false });
-    expect(sent.at(-1)).toEqual({ type: "review:highlight", elementId: id });
-
-    const { id: commentId } = controller.addComment("ここ") as { ok: true; id: string };
-    controller.clearSelection();
-    expect(sent.at(-1)).toEqual({ type: "review:highlight", elementId: null });
-    controller.selectComment(commentId);
-    expect(sent.at(-1)).toEqual({ type: "review:highlight", elementId: id });
-  });
-
-  it("コメントモードでは JS 生成要素も、ソースにある祖先へ黙って紐付けてコメントできる", () => {
-    const { controller, store } = setup();
-    controller.setTool("comment");
-    const pId = idOf(controller.getState(), "p.b");
-    controller.handleFrameMessage({ type: "review:select", elementId: pId, generated: true });
-    const state = controller.getState();
-    expect(state.generatedNotice).toBeNull();
-    expect(state.commentDisabledReason).toBeNull();
-    expect(controller.addComment("スライダーのドット").ok).toBe(true);
-    expect(store.getComments()).toHaveLength(1);
   });
 });

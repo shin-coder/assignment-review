@@ -97,18 +97,9 @@ test.describe("必須シナリオ", () => {
     await expect.poll(() => titleColor(page)).toBe(RED);
   });
 
-  test("再読み込みしても、編集とコメントが IndexedDB から復元される", async ({ page }) => {
+  test("再読み込みしても、編集が IndexedDB から復元される", async ({ page }) => {
     await openApp(page, "simple-image");
     await pickFolderAndWaitPreview(page);
-
-    // コメントを付ける
-    await chooseTool(page, "comment");
-    await previewFrame(page).locator("#title").click();
-    await page.getByRole("textbox", { name: "コメント", exact: true }).fill("見出しの色を確認");
-    await page.getByRole("button", { name: "コメントを追加" }).click();
-    await expect(page.getByRole("list", { name: "コメント一覧" })).toContainText(
-      "見出しの色を確認",
-    );
 
     // CSS を編集する
     await openFile(page, "css/style.css");
@@ -125,22 +116,6 @@ test.describe("必須シナリオ", () => {
     expect((await readPickerRecord(page)).pickerCalls).toBe(0);
     await expect(previewFrame(page).locator("#title")).toBeVisible();
     await expect.poll(() => titleColor(page)).toBe(RED);
-    await chooseTool(page, "comment");
-    await expect(page.getByRole("list", { name: "コメント一覧" })).toContainText(
-      "見出しの色を確認",
-    );
-    // 対象の要素にコメントのピンが立ち、一覧で選ぶとピンが選択状態になる
-    const pin = page.getByRole("button", { name: /コメント 1を開く/ });
-    await expect(pin).toBeVisible();
-    await page
-      .getByRole("list", { name: "コメント一覧" })
-      .getByRole("button", { name: /見出しの色を確認/ })
-      .click();
-    await expect(pin).toHaveAttribute("data-active", "true");
-    await expect(page.getByRole("dialog", { name: "コメント", exact: true })).toContainText(
-      "見出しの色を確認",
-    );
-
     // エディタにも編集後のソースが入っている
     await openFile(page, "css/style.css");
     await expect.poll(() => readEditorText(page)).toContain(RED);
@@ -200,7 +175,7 @@ test.describe("追加シナリオ", () => {
     await expect.poll(width).toBe(1440);
   });
 
-  test("操作モードでは生徒のサイトの JS が動き、コメントモードではクリックが止まる", async ({
+  test("View mode では生徒のサイトの JS が動き、Dev mode ではクリックが止まって要素を選ぶ", async ({
     page,
   }) => {
     await openApp(page, "js-slider");
@@ -212,11 +187,11 @@ test.describe("追加シナリオ", () => {
     await frame.locator(".next").click();
     await expect(frame.locator("#slide-2")).toHaveClass(/is-active/);
 
-    await chooseTool(page, "comment");
+    await chooseTool(page, "dev");
     await frame.locator(".next").click();
     await expect(frame.locator("#slide-2")).toHaveClass(/is-active/);
-    await expect(page.getByTestId("comment-composer")).toBeVisible();
-    // コメントモードでも、クリックした要素に枠と要素名を出す
+    await expect(elementCode(page)).toContainText('class="next"');
+    // クリックした要素に枠と要素名を出す
     await expect
       .poll(() =>
         frame
@@ -229,55 +204,34 @@ test.describe("追加シナリオ", () => {
       .toContain("button.next");
   });
 
-  test("コメントのピンはクリックした場所に立ち、幅を変えても再読み込みしても同じ要素の上にある", async ({
+  test("Dev mode で選んだ要素の CSS ルールが出て、編集するとプレビューに反映される", async ({
     page,
   }) => {
     await openApp(page, "simple-image");
     await pickFolderAndWaitPreview(page);
-    await page.getByTestId("device-mobile").click();
-    await chooseTool(page, "comment");
+    await chooseTool(page, "dev");
+    await previewFrame(page).locator("#title").click();
 
-    const title = previewFrame(page).locator("#title");
-    await title.click({ position: { x: 40, y: 10 } });
-    const textbox = page.getByRole("textbox", { name: "コメント", exact: true });
-    await textbox.fill("ここを直す");
-    await textbox.press("Enter");
+    const rule = page.getByTestId("element-css").filter({ hasText: BLUE }).first();
+    await expect(rule).toBeVisible();
+    const content = rule.locator(".cm-content");
+    const text = await content.evaluate((element) => (element as HTMLElement).innerText);
+    await content.click();
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.insertText(text.replace(BLUE, RED));
 
-    const pin = page.getByRole("button", { name: /コメント 1を開く/ });
-    // ピンの先（左下）が見出しの中にあるか
-    const pinTipInsideTitle = async () => {
-      const pinBox = (await pin.boundingBox())!;
-      const titleBox = (await title.boundingBox())!;
-      const tipX = pinBox.x;
-      const tipY = pinBox.y + pinBox.height;
-      return (
-        tipX >= titleBox.x - 1 &&
-        tipX <= titleBox.x + titleBox.width + 1 &&
-        tipY >= titleBox.y - 1 &&
-        tipY <= titleBox.y + titleBox.height + 1
-      );
-    };
-    await expect(pin).toBeVisible();
-    await expect.poll(pinTipInsideTitle).toBe(true);
-    // 送信すると、そのコメントが開いた状態になる（ピンをもう一度押すと閉じる）
-    await expect(page.getByRole("dialog", { name: "コメント", exact: true })).toBeVisible();
-    await pin.click();
-    await expect(page.getByRole("dialog", { name: "コメント", exact: true })).toHaveCount(0);
-
-    // 幅を変えてレイアウトが変わっても、見出しの上に立つ
-    await page.getByTestId("device-tablet").click();
-    await expect.poll(pinTipInsideTitle).toBe(true);
-    await waitSaved(page);
-
-    await page.reload();
-    await chooseTool(page, "comment");
-    await expect(pin).toBeVisible();
-    await expect.poll(pinTipInsideTitle).toBe(true);
+    await expect.poll(() => titleColor(page)).toBe(RED);
+    // CSS ファイル全体の、そのルールだけが変わっている（ほかのルールはそのまま）
+    await openFile(page, "css/style.css");
+    await expect.poll(() => readEditorText(page)).toContain(RED);
+    const edited = await readEditorText(page);
+    expect(edited).not.toContain(BLUE);
+    // エディタは画面に見えている行だけを描くので、近くのルールで確かめる
+    expect(edited).toContain(".global-nav ul {");
+    expect(edited).toContain("font-size: 28px;");
   });
 
-  test("JS が生成した要素は、開発モードでは対象外の案内が出て、コメントモードでは祖先に付けてコメントできる", async ({
-    page,
-  }) => {
+  test("JS が生成した要素は、Dev mode で対象外の案内が出る", async ({ page }) => {
     await openApp(page, "js-slider");
     await pickFolderAndWaitPreview(page);
     await expect(previewFrame(page).locator(".dot")).toHaveCount(3);
@@ -285,15 +239,6 @@ test.describe("追加シナリオ", () => {
     await chooseTool(page, "dev");
     await previewFrame(page).locator(".dot").first().click();
     await expect(page.getByTestId("generated-notice")).toBeVisible();
-
-    await chooseTool(page, "comment");
-    await previewFrame(page).locator(".dot").first().click();
-    await expect(page.getByTestId("generated-notice")).toHaveCount(0);
-    const textbox = page.getByRole("textbox", { name: "コメント", exact: true });
-    await expect(textbox).toBeEnabled();
-    await textbox.fill("ドットが小さい");
-    await textbox.press("Enter");
-    await expect(page.getByRole("list", { name: "コメント一覧" })).toContainText("ドットが小さい");
   });
 
   test("閉じタグ漏れの HTML でも、プレビュー・ツリー・クリック選択が動く", async ({ page }) => {
@@ -321,5 +266,22 @@ test.describe("追加シナリオ", () => {
     const record = await readPickerRecord(page);
     expect(record.pickerCalls).toBe(1);
     expect(record.writeCalls).toEqual([]);
+  });
+});
+
+test.describe("表示の重なり", () => {
+  test("プロジェクトのメニューは、下のプレビューに隠れずに一番上に出る", async ({ page }) => {
+    await openApp(page, "simple-image");
+    await pickFolderAndWaitPreview(page);
+    await page.getByTestId("project-menu").click();
+    const item = page.getByTestId("delete-project");
+    await expect(item).toBeVisible();
+    const box = (await item.boundingBox())!;
+    const topmost = await page.evaluate(
+      ({ x, y }) =>
+        document.elementFromPoint(x, y)?.closest("[data-testid]")?.getAttribute("data-testid"),
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    expect(topmost).toBe("delete-project");
   });
 });

@@ -168,6 +168,7 @@ describe("クリック", () => {
       type: "review:select",
       elementId: "3",
       generated: false,
+      rules: [],
     });
   });
 
@@ -181,8 +182,6 @@ describe("クリック", () => {
       type: "review:select",
       elementId: "3",
       generated: true,
-      // クリック位置（clientX/Y は 0）は、祖先の矩形に対する割合で送る（範囲外は 0〜1 に収める）
-      point: { x: 0, y: 0 },
     });
     // 選択の枠は、親で選ばれる祖先に付ける
     expect(box("selected").classList.contains("visible")).toBe(true);
@@ -215,6 +214,7 @@ describe("クリック", () => {
       type: "review:select",
       elementId: "7",
       generated: false,
+      rules: [],
     });
   });
 
@@ -612,37 +612,6 @@ describe("review:mode", () => {
   });
 });
 
-describe("review:track", () => {
-  it("頼まれた要素の矩形を返し、見つからない要素は含めない", () => {
-    const { post } = setup(PAGE);
-    mockRect(byId("2"), rect(10, 20, 30, 40));
-    message({ type: "review:track", elementIds: ["2", "99"] });
-    expect(post).toHaveBeenCalledWith({
-      type: "review:rects",
-      rects: [{ elementId: "2", x: 10, y: 20, width: 30, height: 40 }],
-    });
-  });
-
-  it("スクロールで矩形が変わったら送り直し、変わらなければ送らない", async () => {
-    const { post } = setup(PAGE);
-    const spy = mockRect(byId("2"), rect(10, 20, 30, 40));
-    message({ type: "review:track", elementIds: ["2"] });
-    post.mockClear();
-
-    window.dispatchEvent(new Event("scroll"));
-    await nextFrames();
-    expect(post).not.toHaveBeenCalled();
-
-    spy.mockReturnValue(rect(10, -80, 30, 40));
-    window.dispatchEvent(new Event("scroll"));
-    await nextFrames();
-    expect(post).toHaveBeenCalledWith({
-      type: "review:rects",
-      rects: [{ elementId: "2", x: 10, y: -80, width: 30, height: 40 }],
-    });
-  });
-});
-
 describe("キーの転送", () => {
   function press(target: EventTarget, init: KeyboardEventInit) {
     target.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...init }));
@@ -650,33 +619,48 @@ describe("キーの転送", () => {
 
   it("ツール切り替えのキーと Escape を親へ送る", () => {
     const { post } = setup(PAGE);
-    press(document.body, { key: "C" });
+    press(document.body, { key: "D" });
     press(document.body, { key: "Escape" });
-    expect(post).toHaveBeenCalledWith({ type: "review:key", key: "c" });
+    expect(post).toHaveBeenCalledWith({ type: "review:key", key: "d" });
     expect(post).toHaveBeenCalledWith({ type: "review:key", key: "Escape" });
   });
 
   it("入力欄の中・修飾キー付き・対象外のキーは送らない", () => {
     const { post } = setup(`${PAGE}<input data-review-id="9" />`);
-    press(byId("9"), { key: "c" });
-    press(document.body, { key: "c", metaKey: true });
-    press(document.body, { key: "x" });
+    press(byId("9"), { key: "d" });
+    press(document.body, { key: "d", metaKey: true });
+    press(document.body, { key: "c" });
     expect(post).not.toHaveBeenCalled();
   });
 });
 
-describe("クリックした位置", () => {
-  it("選んだ要素に対する割合を point で送る", () => {
-    const { post } = setup(PAGE);
-    mockRect(byId("2"), rect(10, 20, 100, 40));
-    byId("2").dispatchEvent(
-      new MouseEvent("click", { bubbles: true, cancelable: true, clientX: 35, clientY: 30 }),
-    );
-    expect(post).toHaveBeenCalledWith({
-      type: "review:select",
-      elementId: "2",
-      generated: false,
-      point: { x: 0.25, y: 0.25 },
+describe("要素に当たっている CSS ルール", () => {
+  it("クリックした要素に当たる、CSS ファイルのルールを review:select で送る", () => {
+    document.head.innerHTML = '<link rel="stylesheet" href="css/style.css">';
+    const { post } = setup(`<p data-review-id="1" class="lead">a</p>`);
+    // jsdom は <link> を読み込まないので、CSS を差し替えて <style> にする（編集後と同じ状態）
+    message({
+      type: "review:replace-css",
+      path: "css/style.css",
+      text: ".lead { color: red; } .other { color: blue; } p::before { content: '' }",
     });
+    click(byId("1"));
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "review:select",
+        elementId: "1",
+        rules: [
+          expect.objectContaining({ path: "css/style.css", selector: ".lead", occurrence: 0 }),
+          expect.objectContaining({ path: "css/style.css", selector: "p::before" }),
+        ],
+      }),
+    );
+  });
+
+  it("HTML の中の <style> のルールは対象外（ファイルがないため）", () => {
+    document.head.innerHTML = "<style>.lead { color: red; }</style>";
+    const { post } = setup(`<p data-review-id="1" class="lead">a</p>`);
+    click(byId("1"));
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ elementId: "1", rules: [] }));
   });
 });

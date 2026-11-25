@@ -1,6 +1,7 @@
 import { useState, type DragEvent } from "react";
 import type { DirectoryHandleLike } from "../loader";
-import { CodeIcon, CommentIcon, FolderIcon } from "../ui/review/icons";
+import { Brand } from "../ui/review/Brand";
+import { UploadIcon } from "../ui/review/icons";
 
 export interface EmptyScreenProps {
   /** showDirectoryPicker が使えるか */
@@ -63,26 +64,28 @@ export function EmptyScreen({ supported, busy, onPick, onDrop }: EmptyScreenProp
       onDrop={(event) => void handleDrop(event)}
     >
       <div className="empty-card">
-        <span className="empty-logo" aria-hidden="true">
-          <CommentIcon size={26} />
-        </span>
-        <h1 className="empty-title">生徒サイト レビューツール</h1>
-        <p className="empty-lead">生徒のサイトのフォルダを選んでください。</p>
+        <Brand size="lg" />
+
+        <div className="empty-heading">
+          <h1 className="empty-title">Start a new review.</h1>
+          <p className="empty-lead">生徒のサイトのフォルダを選んで開始します。</p>
+        </div>
 
         <div className="dropzone" data-active={dragging ? "true" : undefined}>
           <span className="dropzone-icon" aria-hidden="true">
-            <FolderIcon size={32} />
+            <UploadIcon size={24} />
           </span>
+          <p className="dropzone-title">フォルダをここにドロップ</p>
+          <p className="dropzone-hint">HTML・CSS・JavaScript が入ったフォルダ</p>
           <button
             type="button"
-            className="btn btn-primary btn-large"
+            className="btn btn-light"
             data-testid="open-folder"
             disabled={!supported || busy}
             onClick={onPick}
           >
-            {busy ? "読み込み中…" : "フォルダを選ぶ"}
+            {busy ? "読み込み中…" : "フォルダを選択"}
           </button>
-          <p className="dropzone-hint">または、ここにフォルダをドラッグ＆ドロップ</p>
         </div>
 
         {!supported && (
@@ -96,19 +99,7 @@ export function EmptyScreen({ supported, busy, onPick, onDrop }: EmptyScreenProp
           </p>
         )}
 
-        <ul className="empty-features">
-          <li>
-            <CommentIcon size={18} />
-            要素をクリックしてコメント
-          </li>
-          <li>
-            <CodeIcon size={18} />
-            HTML / CSS / JS をその場で編集
-          </li>
-        </ul>
-        <p className="empty-note">
-          読み込んだフォルダには書き込みません。編集とコメントはこのブラウザだけに保存されます。
-        </p>
+        <p className="empty-footer">A simple space for reviewing code.</p>
       </div>
     </main>
   );

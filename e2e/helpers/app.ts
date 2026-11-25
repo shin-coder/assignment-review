@@ -28,7 +28,7 @@ export function titleColor(page: Page): Promise<string> {
 }
 
 /** 画面下のツールバーでツールを選ぶ */
-export async function chooseTool(page: Page, tool: "browse" | "comment" | "dev"): Promise<void> {
+export async function chooseTool(page: Page, tool: "browse" | "dev"): Promise<void> {
   await page.getByTestId(`tool-${tool}`).click();
   await expect(page.getByTestId("review-screen")).toHaveAttribute("data-tool", tool);
 }
@@ -38,7 +38,10 @@ export async function openFile(page: Page, path: string): Promise<void> {
   if ((await page.getByTestId("review-screen").getAttribute("data-tool")) !== "dev") {
     await chooseTool(page, "dev");
   }
-  await page.getByTestId("dev-view-file").click();
+  // すでにファイル全体の表示（「この要素に戻る」がある）なら、そのまま使う
+  if ((await page.getByTestId("dev-view-element").count()) === 0) {
+    await page.getByTestId("dev-view-file").click();
+  }
   const tab = page.locator(`[role="tab"][title="${path}"]`);
   if ((await tab.count()) > 0) {
     await tab.click();

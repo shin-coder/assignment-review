@@ -1,35 +1,41 @@
-import type { ReactNode } from "react";
 import type { Tool } from "../../app/reviewController";
-import { CodeIcon, CommentIcon, CursorIcon } from "./icons";
 
 export interface ToolbarProps {
   tool: Tool;
   onToolChange: (tool: Tool) => void;
 }
 
-const TOOLS: { id: Tool; name: string; icon: ReactNode }[] = [
-  { id: "browse", name: "操作", icon: <CursorIcon size={22} /> },
-  { id: "comment", name: "コメント", icon: <CommentIcon size={22} /> },
-  { id: "dev", name: "開発", icon: <CodeIcon size={22} /> },
+const TOOLS: { id: Tool; label: string; hint: string }[] = [
+  { id: "browse", label: "View mode", hint: "サイトをそのまま操作して確認する（V）" },
+  { id: "dev", label: "Dev mode", hint: "要素をクリックして HTML と CSS を見る・編集する（D）" },
 ];
 
-/** 画面下の浮いたツールバー。アイコンだけを並べる（名前はホバーで出る） */
+/** 画面下の浮いたツールバー。View mode / Dev mode を文字だけで切り替える */
 export function Toolbar({ tool, onToolChange }: ToolbarProps) {
+  const index = Math.max(
+    0,
+    TOOLS.findIndex((item) => item.id === tool),
+  );
   return (
     <div className="toolbar" role="radiogroup" aria-label="モード">
+      {/* 選択中の背景。ボタンは同じ幅なので、自分の幅ずつずらす */}
+      <span
+        className="toolbar-indicator"
+        aria-hidden="true"
+        style={{ transform: `translateX(${index * 100}%)` }}
+      />
       {TOOLS.map((item) => (
         <button
           key={item.id}
           type="button"
           role="radio"
           aria-checked={tool === item.id}
-          aria-label={item.name}
-          title={item.name}
+          title={item.hint}
           className="toolbar-tool"
           data-testid={`tool-${item.id}`}
           onClick={() => onToolChange(item.id)}
         >
-          {item.icon}
+          {item.label}
         </button>
       ))}
     </div>
