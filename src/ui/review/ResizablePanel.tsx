@@ -1,4 +1,11 @@
-import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
 
 export interface ResizablePanelProps {
   /** 幅を覚えておく localStorage のキー */
@@ -6,8 +13,15 @@ export interface ResizablePanelProps {
   label: string;
   defaultWidth: number;
   minWidth?: number;
+  /** false にすると横へ畳んで閉じる（閉じ終わるまで中身は残す） */
+  open: boolean;
   children: ReactNode;
 }
+
+/** 開閉のアニメーションの長さ（app.css の .panel-slot と揃える） */
+export const PANEL_TRANSITION_MS = 260;
+/** パネルの右の余白（app.css の .side-panel の margin-right と揃える） */
+const PANEL_GAP = 24;
 
 const KEY_STEP = 24;
 
@@ -39,8 +53,28 @@ export function ResizablePanel({
   label,
   defaultWidth,
   minWidth = 280,
+  open,
   children,
 }: ResizablePanelProps) {
+  // 開くときは、幅 0 で置いてから次のフレームで広げる（いきなり広がらないように）。
+  // 閉じるときは、畳み終わってから中身を外す
+  const [mounted, setMounted] = useState(open);
+  const [expanded, setExpanded] = useState(open);
+  // 開いたら、描く時点で中身を置く（幅はまだ 0）
+  if (open && !mounted) setMounted(true);
+  useEffect(() => {
+    if (open) {
+      const handle = setTimeout(() => setExpanded(true), 16);
+      return () => clearTimeout(handle);
+    }
+    // 閉じたら open だけで畳み始め、畳み終わってから中身を外す
+    const handle = setTimeout(() => {
+      setExpanded(false);
+      setMounted(false);
+    }, PANEL_TRANSITION_MS);
+    return () => clearTimeout(handle);
+  }, [open]);
+
   const key = `review-tool:panel-width:${storageKey}`;
   const [width, setWidth] = useState(() => clampWidth(loadWidth(key, defaultWidth), minWidth));
   const dragRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
@@ -82,31 +116,44 @@ export function ResizablePanel({
     event.preventDefault();
   }
 
+  const visible = open && expanded;
   return (
-    <aside
-      className="side-panel"
-      aria-label={label}
-      style={{ width }}
+    <div
+      className="panel-slot"
+      data-state={visible ? "open" : "closed"}
       data-resizing={resizing ? "true" : undefined}
+      style={{ width: visible ? width + PANEL_GAP : 0 }}
     >
-      <div
-        className="resize-handle"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={`${label}パネルの幅`}
-        aria-valuenow={width}
-        tabIndex={0}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={() => {
-          dragRef.current = null;
-          setResizing(false);
-        }}
-        onKeyDown={handleKeyDown}
-        onDoubleClick={() => apply(defaultWidth)}
-      />
-      {children}
-    </aside>
+      {mounted && (
+        <aside
+          className="side-panel"
+          aria-label={label}
+          // 閉じている途中のパネルは、読み上げ・キーボード操作の対象にしない
+          aria-hidden={open ? undefined : true}
+          inert={!open}
+          style={{ width }}
+          data-resizing={resizing ? "true" : undefined}
+        >
+          <div
+            className="resize-handle"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={`${label}パネルの幅`}
+            aria-valuenow={width}
+            tabIndex={0}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={() => {
+              dragRef.current = null;
+              setResizing(false);
+            }}
+            onKeyDown={handleKeyDown}
+            onDoubleClick={() => apply(defaultWidth)}
+          />
+          {children}
+        </aside>
+      )}
+    </div>
   );
 }

@@ -20,8 +20,17 @@ export interface DeviceSwitcherProps {
  * アイコンだけを並べ、幅と倍率はホバーで出す
  */
 export function DeviceSwitcher({ device, onChange, zoomPercent }: DeviceSwitcherProps) {
+  const index = Math.max(
+    0,
+    DEVICES.findIndex((item) => item.id === device),
+  );
   return (
     <div className="device-switcher" role="radiogroup" aria-label="プレビューの幅">
+      <span
+        className="device-switcher-indicator"
+        aria-hidden="true"
+        style={{ transform: `translateX(${index * 100}%)` }}
+      />
       {DEVICES.map((item) => {
         const active = device === item.id;
         const zoom = active && zoomPercent !== null ? `・${zoomPercent}% で表示` : "";

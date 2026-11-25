@@ -206,17 +206,21 @@ export function ReviewScreen({
           <Toolbar tool={tool} onToolChange={(next) => controller.setTool(next)} />
         </div>
 
-        {tool === "dev" && (
-          <ResizablePanel storageKey="dev" label="開発" defaultWidth={520} minWidth={340}>
-            <DevPanel
-              store={store}
-              controller={controller}
-              state={state}
-              view={devView}
-              onViewChange={setDevView}
-            />
-          </ResizablePanel>
-        )}
+        <ResizablePanel
+          storageKey="dev"
+          label="開発"
+          defaultWidth={520}
+          minWidth={340}
+          open={tool === "dev"}
+        >
+          <DevPanel
+            store={store}
+            controller={controller}
+            state={state}
+            view={devView}
+            onViewChange={setDevView}
+          />
+        </ResizablePanel>
       </div>
     </div>
   );

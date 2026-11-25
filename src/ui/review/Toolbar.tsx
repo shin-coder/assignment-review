@@ -12,8 +12,18 @@ const TOOLS: { id: Tool; label: string; hint: string }[] = [
 
 /** 画面下の浮いたツールバー。View mode / Dev mode を文字だけで切り替える */
 export function Toolbar({ tool, onToolChange }: ToolbarProps) {
+  const index = Math.max(
+    0,
+    TOOLS.findIndex((item) => item.id === tool),
+  );
   return (
     <div className="toolbar" role="radiogroup" aria-label="モード">
+      {/* 選択中の背景。ボタンは同じ幅なので、自分の幅ずつずらす */}
+      <span
+        className="toolbar-indicator"
+        aria-hidden="true"
+        style={{ transform: `translateX(${index * 100}%)` }}
+      />
       {TOOLS.map((item) => (
         <button
           key={item.id}

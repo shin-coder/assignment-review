@@ -310,7 +310,6 @@ body {
   box-shadow:
     0 0 0 1px rgb(0 0 0 / 0.08),
     var(--shadow-2);
-  transition: width 0.2s ease;
 }
 
 .device-viewport {
@@ -499,13 +498,14 @@ body {
 /* ---- 下のツールバー（アイコンだけ） ---- */
 
 .toolbar {
+  position: relative;
   border: 1px solid var(--elevated-border);
   position: absolute;
   bottom: 20px;
   left: 50%;
   z-index: 20;
   display: flex;
-  gap: 2px;
+  gap: 0;
   padding: 4px;
   border-radius: 14px;
   background: var(--dock);
@@ -514,8 +514,11 @@ body {
 }
 
 .toolbar-tool {
+  position: relative;
+  z-index: 1;
+  width: 112px;
   height: 40px;
-  padding: 0 18px;
+  padding: 0;
   border: none;
   border-radius: 10px;
   background: transparent;
@@ -525,6 +528,7 @@ body {
   letter-spacing: 0.01em;
   white-space: nowrap;
   cursor: pointer;
+  transition: color 0.2s ease;
 }
 
 .toolbar-tool:hover {
@@ -532,15 +536,15 @@ body {
 }
 
 .toolbar-tool[aria-checked="true"] {
-  background: var(--dock-2);
   color: #fff !important;
 }
 
 /* ---- 上の中央の幅の切り替え ---- */
 
 .device-switcher {
+  position: relative;
   display: flex;
-  gap: 2px;
+  gap: 0;
   padding: 4px;
   border: 1px solid var(--elevated-border);
   border-radius: 12px;
@@ -548,6 +552,8 @@ body {
 }
 
 .device-switcher-option {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
   width: 40px;
@@ -558,6 +564,7 @@ body {
   background: transparent;
   color: var(--ink-3) !important;
   cursor: pointer;
+  transition: color 0.2s ease;
 }
 
 .device-switcher-option:hover {
@@ -565,7 +572,6 @@ body {
 }
 
 .device-switcher-option[aria-checked="true"] {
-  background: var(--surface-2);
   color: var(--ink) !important;
 }
 
@@ -1055,4 +1061,84 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ---- 切り替えのアニメーション ---- */
+
+/* 選択中の背景。ボタンの後ろをすべって移動する */
+.toolbar-indicator,
+.device-switcher-indicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.toolbar-indicator {
+  width: 112px;
+  border-radius: 10px;
+  background: var(--dock-2);
+}
+
+.device-switcher-indicator {
+  width: 40px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+/* 右のパネルの入れ物。幅を 0 ⇔ パネルの幅で動かし、横から出し入れする */
+.panel-slot {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  min-height: 0;
+  overflow: hidden;
+  transition: width 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.panel-slot[data-resizing="true"] {
+  transition: none;
+}
+
+.panel-slot .side-panel {
+  transition:
+    opacity 0.2s ease,
+    transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.panel-slot[data-state="closed"] .side-panel {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+/* 幅を切り替えた直後だけ、白い枠の大きさと位置をなめらかに変える */
+.device[data-switching="true"] {
+  transition:
+    width 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+    left 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* 中のサイトは、組み変わる間だけ隠してから、ふわっと出す */
+.device-viewport {
+  transition: opacity 0.22s ease;
+}
+
+.device[data-switching="true"] .device-viewport {
+  opacity: 0;
+  transition: opacity 0.06s ease;
+}
+
+/* 動きを減らす設定の人には、アニメーションを出さない */
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-indicator,
+  .device-switcher-indicator,
+  .panel-slot,
+  .panel-slot .side-panel,
+  .device[data-switching="true"],
+  .device-viewport,
+  .device[data-switching="true"] .device-viewport {
+    transition: none;
+  }
 }
