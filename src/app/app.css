@@ -407,6 +407,7 @@ body {
 }
 
 .menu {
+  z-index: 40;
   border: 1px solid var(--elevated-border);
   position: absolute;
   top: calc(100% + 6px);
@@ -891,6 +892,9 @@ body {
 /* ---- 上のヘッダー ---- */
 
 .topbar {
+  /* プロジェクトのメニューがヘッダーの下へはみ出すので、下の作業領域より前に出す */
+  position: relative;
+  z-index: 30;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;

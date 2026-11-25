@@ -268,3 +268,20 @@ test.describe("追加シナリオ", () => {
     expect(record.writeCalls).toEqual([]);
   });
 });
+
+test.describe("表示の重なり", () => {
+  test("プロジェクトのメニューは、下のプレビューに隠れずに一番上に出る", async ({ page }) => {
+    await openApp(page, "simple-image");
+    await pickFolderAndWaitPreview(page);
+    await page.getByTestId("project-menu").click();
+    const item = page.getByTestId("delete-project");
+    await expect(item).toBeVisible();
+    const box = (await item.boundingBox())!;
+    const topmost = await page.evaluate(
+      ({ x, y }) =>
+        document.elementFromPoint(x, y)?.closest("[data-testid]")?.getAttribute("data-testid"),
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    expect(topmost).toBe("delete-project");
+  });
+});
