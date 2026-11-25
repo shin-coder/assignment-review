@@ -6,7 +6,7 @@ import { applySnippet, lineOf, snippetRange, type SnippetRange } from "../../app
 import type { MatchedCssRule, SourceLocation } from "../../shared";
 import type { SourceStore } from "../../store";
 import { CodeEditor, FileTabs } from "../editor";
-import { CodeIcon, FileIcon } from "./icons";
+import { ArrowLeftIcon, CodeIcon } from "./icons";
 
 export type DevView = "element" | "file";
 
@@ -18,42 +18,15 @@ export interface DevPanelProps {
   onViewChange: (view: DevView) => void;
 }
 
-/** 開発モードの右側のパネル。「この要素」は選んだ要素のコードだけ、「ファイル」はファイル全体を出す */
+/**
+ * Dev mode の右側のパネル。ふだんは選んだ要素の HTML と CSS だけを出し、
+ * 「ファイル全体で見る」からファイル全体のエディタに切り替える
+ */
 export function DevPanel({ store, controller, state, view, onViewChange }: DevPanelProps) {
   const textPaths = store.paths().filter((path) => typeof store.getEdited(path) === "string");
-  const relatedPaths = textPaths.filter((path) => /\.(css|js|mjs)$/i.test(path));
-
-  function openFile(path: string) {
-    controller.openFile(path);
-    onViewChange("file");
-  }
 
   return (
     <>
-      <header className="side-panel-header">
-        <h2 className="side-panel-title">Dev mode</h2>
-        <div className="segmented" role="radiogroup" aria-label="表示">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={view === "element"}
-            data-testid="dev-view-element"
-            onClick={() => onViewChange("element")}
-          >
-            この要素
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={view === "file"}
-            data-testid="dev-view-file"
-            onClick={() => onViewChange("file")}
-          >
-            ファイル
-          </button>
-        </div>
-      </header>
-
       {state.message && (
         <p role="alert" className="panel-notice" data-testid="app-message">
           {state.message}
@@ -65,15 +38,20 @@ export function DevPanel({ store, controller, state, view, onViewChange }: DevPa
           store={store}
           controller={controller}
           state={state}
-          relatedPaths={relatedPaths}
-          onOpenFile={openFile}
+          onOpenFiles={() => onViewChange("file")}
           onShowInFile={() => {
             if (state.selectedLocation) controller.openFile(state.selectedLocation.filePath);
             onViewChange("file");
           }}
         />
       ) : (
-        <FileView store={store} controller={controller} state={state} textPaths={textPaths} />
+        <FileView
+          store={store}
+          controller={controller}
+          state={state}
+          textPaths={textPaths}
+          onBack={() => onViewChange("element")}
+        />
       )}
     </>
   );
@@ -83,15 +61,13 @@ function ElementView({
   store,
   controller,
   state,
-  relatedPaths,
-  onOpenFile,
+  onOpenFiles,
   onShowInFile,
 }: {
   store: SourceStore;
   controller: ReviewController;
   state: ReviewState;
-  relatedPaths: string[];
-  onOpenFile: (path: string) => void;
+  onOpenFiles: () => void;
   onShowInFile: () => void;
 }) {
   // 編集の途中で要素が見つからなくなっても（タグを書きかけたときなど）、
@@ -132,6 +108,14 @@ function ElementView({
             <br />
             その要素の HTML と CSS がここに出ます
           </p>
+          <button
+            type="button"
+            className="btn btn-quiet"
+            data-testid="dev-view-file"
+            onClick={onOpenFiles}
+          >
+            ファイルを開く
+          </button>
         </div>
       ) : (
         <p className="panel-notice" role="status">
@@ -159,30 +143,7 @@ function ElementView({
     );
   }
 
-  return (
-    <div className="dev-element">
-      {body}
-      {relatedPaths.length > 0 && (
-        <div className="related-files">
-          <span className="related-files-title">ファイルを開く</span>
-          <div className="related-files-list">
-            {relatedPaths.map((path) => (
-              <button
-                key={path}
-                type="button"
-                className="file-chip"
-                data-modified={store.isEdited(path) ? "true" : undefined}
-                onClick={() => onOpenFile(path)}
-              >
-                <FileIcon size={14} />
-                {path}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="dev-element">{body}</div>;
 }
 
 /** エディタ 1 行の高さ（18px × 行間 1.6） */
@@ -233,7 +194,12 @@ function SnippetEditor({
         <span className="snippet-where">
           {path} ・ {linesLabel(text, range)}
         </span>
-        <button type="button" className="link-button" onClick={onShowInFile}>
+        <button
+          type="button"
+          className="link-button snippet-file-link"
+          data-testid="dev-view-file"
+          onClick={onShowInFile}
+        >
           ファイル全体で見る
         </button>
       </div>
@@ -319,7 +285,7 @@ function CssRulesView({
     <section className="code-section" aria-label="CSS">
       <div className="snippet-meta">
         <span className="code-section-title">CSS</span>
-        <span className="snippet-where">{entries.length} 件</span>
+        <span className="snippet-where">{entries.length}件</span>
       </div>
       {entries.length === 0 ? (
         <p className="code-section-empty">この要素に当たっている CSS ルールはありません</p>
@@ -367,11 +333,13 @@ function FileView({
   controller,
   state,
   textPaths,
+  onBack,
 }: {
   store: SourceStore;
   controller: ReviewController;
   state: ReviewState;
   textPaths: string[];
+  onBack: () => void;
 }) {
   const { activePath } = state;
   const activeValue = activePath === null ? undefined : store.getEdited(activePath);
@@ -383,6 +351,17 @@ function FileView({
 
   return (
     <section className="dev-file" aria-label="コードエディタ">
+      <div className="dev-file-back">
+        <button
+          type="button"
+          className="link-button"
+          data-testid="dev-view-element"
+          onClick={onBack}
+        >
+          <ArrowLeftIcon size={16} />
+          この要素に戻る
+        </button>
+      </div>
       <div className="dev-file-tabs">
         <FileTabs
           files={state.openPaths.map((path) => ({ path, modified: store.isEdited(path) }))}

@@ -93,3 +93,24 @@ export const FileIcon = (p: IconProps) => (
     <path d="M14 3v4.5h4.5" />
   </Icon>
 );
+
+/** ロゴの「重なった層」 */
+export const LayersIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m12 3 9 4.5-9 4.5-9-4.5L12 3Z" />
+    <path d="m3 12 9 4.5 9-4.5" />
+    <path d="m3 16.5 9 4.5 9-4.5" />
+  </Icon>
+);
+
+export const UploadIcon = (p: IconProps) => (
+  <Icon {...p} strokeWidth={2}>
+    <path d="M5 4.5h14M12 20V9M7 13.5 12 8.5l5 5" />
+  </Icon>
+);
+
+export const ArrowLeftIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M19 12H5M11 6l-6 6 6 6" />
+  </Icon>
+);

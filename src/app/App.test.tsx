@@ -160,15 +160,17 @@ describe("起動", () => {
   it("保存済みがなければフォルダ選択を促す", async () => {
     const { deps } = createDeps();
     render(<App deps={deps} />);
-    expect(await screen.findByText(/フォルダを選んでください/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "生徒サイト レビューツール" })).toBeInTheDocument();
+    expect(await screen.findByText(/フォルダを選んで開始します/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Start a new review." })).toBeInTheDocument();
     expect(screen.queryByTestId("review-screen")).toBeNull();
   });
 
-  it("レビュー画面にはヘッダーもレイヤーツリーも出さず、パネルはモードに応じて出す", async () => {
+  it("レビュー画面は上にロゴとプロジェクト名のヘッダーを置き、パネルはモードに応じて出す", async () => {
     const { deps } = createDeps();
     await restoreProject(deps);
-    expect(screen.queryByRole("banner")).toBeNull();
+    const header = screen.getByRole("banner");
+    expect(header).toHaveTextContent("review.");
+    expect(header).toHaveTextContent("student-site");
     expect(screen.queryByRole("tree")).toBeNull();
     expect(screen.queryByRole("complementary")).toBeNull();
     chooseTool("dev");
@@ -238,7 +240,7 @@ describe("起動", () => {
     const registerWorker = vi.fn(() => Promise.resolve());
     const { deps } = createDeps({ registerWorker });
     render(<App deps={deps} />);
-    await screen.findByText(/フォルダを選んでください/);
+    await screen.findByText(/フォルダを選んで開始します/);
     expect(registerWorker).toHaveBeenCalledTimes(1);
   });
 });
@@ -485,7 +487,7 @@ describe("リセットと削除", () => {
     openMenu();
     fireEvent.click(screen.getByTestId("delete-project"));
     fireEvent.click(screen.getByTestId("delete-project-confirm"));
-    await screen.findByText(/フォルダを選んでください/);
+    await screen.findByText(/フォルダを選んで開始します/);
     expect(clearFiles).toHaveBeenCalledWith("project-1");
     expect(await repository.loadLatest()).toBeNull();
     expect(await repository.list()).toEqual([]);

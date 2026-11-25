@@ -201,9 +201,7 @@ body {
   flex: 1;
   place-items: center;
   padding: 32px 16px;
-  background:
-    radial-gradient(circle at 1px 1px, var(--dots) 1px, transparent 0) 0 0 / 22px 22px,
-    var(--canvas);
+  background: var(--canvas);
 }
 
 .empty-card {
@@ -218,16 +216,6 @@ body {
   background: var(--surface);
   box-shadow: var(--shadow-2);
   text-align: center;
-}
-
-.empty-logo {
-  display: grid;
-  place-items: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: var(--accent);
-  color: #fff;
 }
 
 .empty-title {
@@ -286,35 +274,12 @@ body {
   font-weight: 600;
 }
 
-.empty-features {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px 20px;
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-  color: var(--ink-2);
-  font-size: 14px;
-}
-
-.empty-features li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.empty-note {
-  margin: 0;
-  color: var(--ink-3);
-  font-size: 13px;
-}
-
 /* ---- レビュー画面 ---- */
 
 .review {
   display: flex;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
 }
 
@@ -334,9 +299,7 @@ body {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 1px 1px, var(--dots) 1px, transparent 0) 0 0 / 22px 22px,
-    var(--canvas);
+  background: var(--canvas);
 }
 
 .device {
@@ -369,32 +332,24 @@ body {
 /* ---- 左上のプロジェクト名 ---- */
 
 .project-chip {
-  border: 1px solid var(--elevated-border);
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 20;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
-  max-width: calc(100% - 24px);
-  padding: 4px;
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
+  min-width: 0;
 }
 
 .project-trigger {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  height: 32px;
-  padding: 0 8px 0 10px;
-  color: var(--ink-2) !important;
+  height: 36px;
+  padding: 0 10px;
   border: none;
   border-radius: 8px;
   background: transparent;
+  color: var(--ink-2) !important;
   cursor: pointer;
 }
 
@@ -405,10 +360,10 @@ body {
 
 .project-name {
   overflow: hidden;
-  max-width: 240px;
+  max-width: 260px;
   color: var(--ink);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -584,25 +539,19 @@ body {
 /* ---- 上の中央の幅の切り替え ---- */
 
 .device-switcher {
-  border: 1px solid var(--elevated-border);
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  z-index: 15;
   display: flex;
   gap: 2px;
   padding: 4px;
+  border: 1px solid var(--elevated-border);
   border-radius: 12px;
   background: var(--surface);
-  box-shadow: var(--shadow-1);
-  transform: translateX(-50%);
 }
 
 .device-switcher-option {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 32px;
+  width: 40px;
+  height: 34px;
   padding: 0;
   border: none;
   border-radius: 8px;
@@ -628,7 +577,10 @@ body {
   flex-direction: column;
   flex: none;
   min-height: 0;
-  border-left: 1px solid var(--line);
+  margin: 24px 24px 24px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
   background: var(--surface);
 }
 
@@ -637,7 +589,7 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -4px;
+  left: 0;
   z-index: 5;
   width: 8px;
   cursor: col-resize;
@@ -928,4 +880,179 @@ body {
 
 .css-rule-media {
   color: var(--warn-ink);
+}
+
+/* ---- 上のヘッダー ---- */
+
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  height: 72px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--canvas);
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.topbar-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--line-strong);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.brand-name {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.brand[data-size="lg"] .brand-name {
+  font-size: 26px;
+  font-weight: 500;
+}
+
+/* ---- ヘッダーの下の作業領域（プレビュー ＋ 右のパネル） ---- */
+
+.workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- 読み込み前の画面（デザイン: カードの中にロゴ・見出し・ドロップ領域） ---- */
+
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 28px;
+  text-align: left;
+  width: min(560px, 100%);
+  box-sizing: border-box;
+  padding: 28px 28px 32px;
+  border: 1px solid var(--elevated-border);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.empty-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 40px;
+  text-align: center;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 38px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.empty-lead {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 16px;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 44px 16px 48px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 18px;
+  background: transparent;
+  text-align: center;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.dropzone-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 8px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.dropzone-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.dropzone-hint {
+  margin: 0 0 8px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.btn-light {
+  min-height: 48px;
+  padding: 0 32px;
+  border: none;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #18181b !important;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.btn-light:hover:not(:disabled) {
+  background: #e7e7ea;
+}
+
+.btn-quiet {
+  min-height: 36px;
+  border-color: var(--line-strong);
+  background: transparent;
+  font-size: 14px;
+}
+
+.empty-footer {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 14px;
+}
+
+/* ---- Dev mode のパネルの中 ---- */
+
+.snippet-file-link {
+  flex-basis: 100%;
+  text-align: right;
+}
+
+.dev-file-back {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dev-file-back .link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

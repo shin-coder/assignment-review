@@ -3,7 +3,9 @@ import { PreviewFrame as DefaultPreviewFrame } from "../preview";
 import type { FrameToParentMessage, ParentToFrameMessage } from "../shared";
 import type { SourceStore } from "../store";
 import { DevPanel, type DevView } from "../ui/review/DevPanel";
+import { Brand } from "../ui/review/Brand";
 import { DeviceCanvas } from "../ui/review/DeviceCanvas";
+import { DeviceSwitcher } from "../ui/review/DeviceSwitcher";
 import { DEVICES, type DeviceId } from "../ui/review/devices";
 import { ProjectMenu, type SaveStatus } from "../ui/review/ProjectMenu";
 import { ResizablePanel } from "../ui/review/ResizablePanel";
@@ -73,6 +75,7 @@ export function ReviewScreen({
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [device, setDevice] = useState<DeviceId>(loadDevice);
   const [devView, setDevView] = useState<DevView>("element");
+  const [zoom, setZoom] = useState<number | null>(null);
   const { postToFrame } = deps;
   const { tool } = state;
 
@@ -139,72 +142,82 @@ export function ReviewScreen({
 
   return (
     <div className="review" data-testid="review-screen" data-tool={tool}>
-      <div className="stage">
-        <ProjectMenu
-          name={store.name}
-          saveStatus={saveStatus}
-          saveError={saveError}
-          hasEdits={store.editedPaths().length > 0}
-          pages={state.htmlPaths}
-          currentPage={state.currentPage}
-          onPageChange={(path) => controller.openPage(path)}
-          busy={busy}
-          canOpenFolder={canOpenFolder}
-          onOpenFolder={onOpenFolder}
-          onResetAll={() => controller.resetAll()}
-          onDeleteProject={onDeleteProject}
-        />
-
-        {state.entryPath === null ? (
-          <p role="alert" className="stage-message">
-            プレビューできる HTML ファイルがありません
-          </p>
-        ) : (
-          <DeviceCanvas device={device} onDeviceChange={changeDevice}>
-            <Frame
-              className="preview"
-              sessionId={store.projectId}
-              files={state.previewFiles}
-              entryPath={state.entryPath}
-              workerReady={workerReady}
-              rebuildKey={state.rebuildKey}
-              ref={iframeRef}
-              sendFiles={deps.sendFiles}
-              onMessage={handleFrameMessage}
-              onLoad={(iframe) => {
-                try {
-                  controller.notifyFramePath(
-                    store.projectId,
-                    iframe.contentWindow?.location.pathname ?? "",
-                  );
-                } catch {
-                  // 別オリジンに移動していたときは何もしない
-                }
-              }}
-            />
-          </DeviceCanvas>
-        )}
-
-        {state.message && tool !== "dev" && (
-          <p role="alert" className="toast stage-toast" data-testid="app-message">
-            {state.message}
-          </p>
-        )}
-
-        <Toolbar tool={tool} onToolChange={(next) => controller.setTool(next)} />
-      </div>
-
-      {tool === "dev" && (
-        <ResizablePanel storageKey="dev" label="開発" defaultWidth={520} minWidth={340}>
-          <DevPanel
-            store={store}
-            controller={controller}
-            state={state}
-            view={devView}
-            onViewChange={setDevView}
+      <header className="topbar">
+        <div className="topbar-left">
+          <Brand />
+          <span className="topbar-divider" aria-hidden="true" />
+          <ProjectMenu
+            name={store.name}
+            saveStatus={saveStatus}
+            saveError={saveError}
+            hasEdits={store.editedPaths().length > 0}
+            pages={state.htmlPaths}
+            currentPage={state.currentPage}
+            onPageChange={(path) => controller.openPage(path)}
+            busy={busy}
+            canOpenFolder={canOpenFolder}
+            onOpenFolder={onOpenFolder}
+            onResetAll={() => controller.resetAll()}
+            onDeleteProject={onDeleteProject}
           />
-        </ResizablePanel>
-      )}
+        </div>
+        <DeviceSwitcher device={device} onChange={changeDevice} zoomPercent={zoom} />
+        <div className="topbar-right" />
+      </header>
+
+      <div className="workspace">
+        <div className="stage">
+          {state.entryPath === null ? (
+            <p role="alert" className="stage-message">
+              プレビューできる HTML ファイルがありません
+            </p>
+          ) : (
+            <DeviceCanvas device={device} onZoomChange={setZoom}>
+              <Frame
+                className="preview"
+                sessionId={store.projectId}
+                files={state.previewFiles}
+                entryPath={state.entryPath}
+                workerReady={workerReady}
+                rebuildKey={state.rebuildKey}
+                ref={iframeRef}
+                sendFiles={deps.sendFiles}
+                onMessage={handleFrameMessage}
+                onLoad={(iframe) => {
+                  try {
+                    controller.notifyFramePath(
+                      store.projectId,
+                      iframe.contentWindow?.location.pathname ?? "",
+                    );
+                  } catch {
+                    // 別オリジンに移動していたときは何もしない
+                  }
+                }}
+              />
+            </DeviceCanvas>
+          )}
+
+          {state.message && tool !== "dev" && (
+            <p role="alert" className="toast stage-toast" data-testid="app-message">
+              {state.message}
+            </p>
+          )}
+
+          <Toolbar tool={tool} onToolChange={(next) => controller.setTool(next)} />
+        </div>
+
+        {tool === "dev" && (
+          <ResizablePanel storageKey="dev" label="開発" defaultWidth={520} minWidth={340}>
+            <DevPanel
+              store={store}
+              controller={controller}
+              state={state}
+              view={devView}
+              onViewChange={setDevView}
+            />
+          </ResizablePanel>
+        )}
+      </div>
     </div>
   );
 }

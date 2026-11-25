@@ -100,7 +100,8 @@ export function ProjectMenu(props: ProjectMenuProps) {
         role="status"
         title={props.saveError ?? SAVE_LABELS[props.saveStatus]}
       >
-        <span className="save-dot" aria-hidden="true" />
+        {/* 保存済みのときは何も出さず、保存中・失敗のときだけ点を出す */}
+        {props.saveStatus !== "saved" && <span className="save-dot" aria-hidden="true" />}
         {/* 見た目は点だけにし、文字は読み上げとホバーで伝える */}
         <span className="visually-hidden">{SAVE_LABELS[props.saveStatus]}</span>
       </span>

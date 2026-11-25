@@ -1,5 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { DeviceSwitcher } from "./DeviceSwitcher";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { deviceOf, type DeviceId } from "./devices";
 import { computeGeometry, FALLBACK, PAD_TOP, type FrameGeometry } from "./geometry";
 
@@ -7,7 +6,8 @@ export type { FrameGeometry };
 
 export interface DeviceCanvasProps {
   device: DeviceId;
-  onDeviceChange: (device: DeviceId) => void;
+  /** 縮小して表示しているときの倍率（%）を知らせる。等倍なら null */
+  onZoomChange?: (percent: number | null) => void;
   /** iframe（プレビュー）。デバイスの幅で描き、縮小は親がまとめて行う */
   children: ReactNode;
 }
@@ -16,7 +16,7 @@ export interface DeviceCanvasProps {
  * 灰色のキャンバスの中央に、選んだデバイスの幅でプレビューを置く。
  * 入りきらない幅（PC の 1440px など）は、iframe のビューポートの幅を変えずに縮小して見せる
  */
-export function DeviceCanvas({ device, onDeviceChange, children }: DeviceCanvasProps) {
+export function DeviceCanvas({ device, onZoomChange, children }: DeviceCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(FALLBACK);
 
@@ -37,14 +37,11 @@ export function DeviceCanvas({ device, onDeviceChange, children }: DeviceCanvasP
   const info = deviceOf(device);
   const geometry = computeGeometry(size, info.width);
   const percent = Math.round(geometry.scale * 100);
+  const zoom = percent < 100 ? percent : null;
+  useEffect(() => onZoomChange?.(zoom), [zoom, onZoomChange]);
 
   return (
     <div className="canvas" ref={canvasRef} data-testid="canvas">
-      <DeviceSwitcher
-        device={device}
-        onChange={onDeviceChange}
-        zoomPercent={percent < 100 ? percent : null}
-      />
       <div
         className="device"
         data-device={device}
